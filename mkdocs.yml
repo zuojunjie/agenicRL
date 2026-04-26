@@ -1,0 +1,69 @@
+site_name: agenicRL · Agentic RL 学习日志
+site_description: 通过 Search-R1 场景端到端学习 Agentic RL 技术栈
+site_author: cv
+
+theme:
+  name: material
+  language: zh
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换暗色
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换亮色
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+nav:
+  - 首页: index.md
+  - 决策:
+      - 场景选择: decisions/scenario.md
+      - 算力约束: decisions/compute.md
+      - 学习路径: decisions/curriculum.md
+  - 架构:
+      - 阶段依赖: architecture/dependencies.md
+      - 共享产物: architecture/trunk-artifacts.md
+  - Phase -1:
+      - 交付清单: phase-minus-1/deliverables.md
+  - 日志:
+      - 2026-04-26 启动会话: journal/2026-04-26-kickoff.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - tables
+  - toc:
+      permalink: true
+
+plugins:
+  - search:
+      lang:
+        - zh
+        - en

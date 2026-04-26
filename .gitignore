@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.python-version
+
+# MkDocs build
+site/
+
+# Models / data / checkpoints (NEVER commit these)
+models/
+data/
+checkpoints/
+*.pt
+*.bin
+*.safetensors
+wikipedia_index/
+*.faiss
+
+# Logs
+*.log
+wandb/
+runs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
