@@ -26,14 +26,25 @@ conda activate searchr1
 # ============================================================
 # 配置
 # ============================================================
-export CUDA_VISIBLE_DEVICES=0,1,2,3                              # 4×A100，不是 8
-export DATA_DIR='/root/autodl-tmp/data/nq_search'                # 本地 NQ parquet
-export BASE_MODEL='/root/autodl-tmp/models/Qwen2.5-3B-Instruct'  # 本地模型，不重下
+# retrieval_server 占 GPU 3，训练用 GPU 0-2（3 卡 FSDP）
+# 4090 无 NVLink，让出 1 张给 retrieval 比 4 卡同时跑更省心
+export CUDA_VISIBLE_DEVICES=0,1,2
+export DATA_DIR='/root/autodl-tmp/data/nq_search'
+export BASE_MODEL='/root/autodl-tmp/models/Qwen2.5-3B-Instruct'
 export EXPERIMENT_NAME=phase0-nq-grpo-qwen2.5-3b-it-em
 export WAND_PROJECT='agentic-rl-search'
 
+# 4090 无 NVLink — 强制 NCCL 走 socket 而不是 P2P
+export NCCL_P2P_DISABLE=1
+export NCCL_IB_DISABLE=1
+
 # vllm 与 qwen2 的 flash_attn 兼容性问题，强制 XFORMERS
 export VLLM_ATTENTION_BACKEND=XFORMERS
+
+# 允许命令行覆盖 max_steps 用作 smoke test
+MAX_STEPS=${MAX_STEPS:-1005}
+TEST_FREQ=${TEST_FREQ:-50}
+SAVE_FREQ=${SAVE_FREQ:-100}
 
 # ============================================================
 # 启动前检查
@@ -90,14 +101,14 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     +trainer.val_only=false \
     +trainer.val_before_train=true \
     trainer.default_hdfs_dir=null \
-    trainer.n_gpus_per_node=4 \
+    trainer.n_gpus_per_node=3 \
     trainer.nnodes=1 \
-    trainer.save_freq=100 \
-    trainer.test_freq=50 \
+    trainer.save_freq=$SAVE_FREQ \
+    trainer.test_freq=$TEST_FREQ \
     trainer.project_name=$WAND_PROJECT \
     trainer.experiment_name=$EXPERIMENT_NAME \
     trainer.total_epochs=15 \
-    trainer.total_training_steps=1005 \
+    trainer.total_training_steps=$MAX_STEPS \
     trainer.default_local_dir=verl_checkpoints/$EXPERIMENT_NAME \
     max_turns=2 \
     retriever.url="http://127.0.0.1:8000/retrieve" \
