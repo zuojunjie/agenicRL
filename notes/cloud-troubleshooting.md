@@ -141,6 +141,20 @@ export HF_ENDPOINT=https://hf-mirror.com   # 顺手用国内 HF 镜像，更稳
 
 **实测**：禁用 xet 后 Qwen2.5-3B (~6GB) 立刻开始正常下载。
 
+## 7.5. `hf_transfer` 与 AutoDL 学术加速代理不兼容
+
+**症状**：开 `HF_HUB_ENABLE_HF_TRANSFER=1` 后，`hf_hub_download` 直接报：
+```
+RuntimeError: An error occurred while downloading using `hf_transfer`.
+Consider disabling HF_HUB_ENABLE_HF_TRANSFER for better error handling.
+```
+
+**根因**：`hf_transfer` 是 HF 官方 Rust 写的并行下载器，号称 5-10x 加速，但它走自己的 HTTP 客户端逻辑、不读 `http_proxy` 环境变量。AutoDL 学术加速代理因此被旁路，hf_transfer 直连 hf.co 失败。
+
+**解法**：**不要开** `HF_HUB_ENABLE_HF_TRANSFER`。接受默认下载器的 ~2 MB/s 速度。
+
+**含义**：80GB Wikipedia index 通过 AutoDL 代理 + 默认下载器 ≈ 11 小时。**这是过夜任务**，nohup 启动后睡觉。
+
 ## 8. SSH heredoc 引号嵌套陷阱
 
 **症状**：在 ssh remote 上想跑 `python -c "..."` 嵌套写在 bash 里，f-string 里的单引号被 outer shell 抢走解析：
