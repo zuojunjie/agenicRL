@@ -1,6 +1,10 @@
 site_name: agenicRL · Agentic RL 学习日志
 site_description: 通过 Search-R1 场景端到端学习 Agentic RL 技术栈
 site_author: cv
+site_url: https://zuojunjie.github.io/agenicRL/
+repo_url: https://github.com/zuojunjie/agenicRL
+repo_name: zuojunjie/agenicRL
+edit_uri: edit/main/docs/
 
 theme:
   name: material
