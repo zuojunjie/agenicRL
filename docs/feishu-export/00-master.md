@@ -41,7 +41,7 @@
 
 | # | 子 doc | 一句话职责 | 维护人 |
 |---|---|---|---|
-| 01 | [决策档案](https://my.feishu.cn/wiki/DXqmwZ8VOivhTZkySxYc1O0onHd) | 为什么是 Search-R1 / 5+2 论文路径 / 4×A100 + 3B 算力配置 | master agent |
+| 01 | [决策档案](https://my.feishu.cn/wiki/DXqmwZ8VOivhTZkySxYc1O0onHd) | 为什么是 Search-R1 / 5+2 论文路径 / 4× RTX 4090 48GB + 3B 算力配置 | master agent |
 | 02 | [架构与阶段依赖](https://my.feishu.cn/wiki/PdXTwNPwTiSa4Kk4DSgcJZd1nrd) | Phase 0–5 DAG · trunk 共享产物 · git/wandb 命名规范 | master agent |
 | 03 | [Search-R1 心智模型](https://my.feishu.cn/wiki/Sj1cwJ7mLiuRuKkE3IucXINInZc) | 60 行 agent loop · 两进程架构 · 与 GRPO 的连接 · 后续 phase 在哪改 | master agent |
 | 04 | [云端运维大全](https://my.feishu.cn/wiki/YYk1wwEZqiwRX4kUUoXczVRWn1b) | AutoDL / HF / SSH / SCP 全部踩坑（§1–§9 master，§10 subAgent 1） | master + subAgent 1 |

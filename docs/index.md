@@ -23,7 +23,7 @@ flowchart LR
 | 维度 | 取值 | 文档 |
 |---|---|---|
 | 场景 | Search-R1（多轮搜索 + QA） | [scenario](decisions/scenario.md) |
-| 算力 | 4×A100（AutoDL 租用） | [compute](decisions/compute.md) |
+| 算力 | 4× RTX 4090 48GB（AutoDL 租用） | [compute](decisions/compute.md) |
 | 基座 | Qwen2.5-3B-Instruct（全程不升 7B） | [compute](decisions/compute.md) |
 | 节奏 | 晚间常规型，训练 run 原子化 | [compute](decisions/compute.md) |
 | 论文路径 | 5 主干 + 2 增补 | [curriculum](decisions/curriculum.md) |

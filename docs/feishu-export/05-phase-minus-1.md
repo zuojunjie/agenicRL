@@ -15,7 +15,7 @@
 | 3 | Wikipedia corpus + 预构建 retrieval index 下载 | 🟢 **接近完成** | `e5_Flat.index` (80GB)；得益于 parallel_dl.py 突破，预计 < 1h 完成 |
 | 4 | QA 数据集（NQ / HotpotQA dev） | ⏸ 等 #3 完事再做 | jsonl 落盘 |
 | 5 | CPU/MPS 烟雾测试：Qwen2.5-0.5B 跑通 agent loop | ✅ **完成** | 本地 mock-search 版本 PASS, MPS 9.7 tok/s |
-| 6 | AutoDL 账号 + 镜像选定 + 网盘开通 | ✅ **完成** | 4×A100 实例已开（无卡模式中），350GB 持久化盘挂载 |
+| 6 | AutoDL 账号 + 镜像选定 + 网盘开通 | ✅ **完成** | 4× RTX 4090 48GB 实例已开（无卡模式中），350GB 持久化盘挂载 |
 | 7 | 一键启动脚本 `bootstrap.sh` | ✅ **完成** | `scripts/cloud_setup.sh` 集成所有踩坑经验 |
 | 8 | wandb 账号 + project + 命名规范 | ✅ **完成** | 用户已配置（key 在 ~/.netrc） |
 

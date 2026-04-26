@@ -1,6 +1,6 @@
 # 云端运维大全 · 踩坑与传输实测
 
-> **范围**：AutoDL 4×A100 实例上做 Search-R1 训练时遇到的所有"非教程"问题
+> **范围**：AutoDL 4× RTX 4090 48GB 实例上做 Search-R1 训练时遇到的所有"非教程"问题
 > **来源**：
 > - §1–§9 由 master agent 在 Phase -1 设置过程中沉淀
 > - §10 由 subAgent 1（worktree `sweet-archimedes-7376d4`）实测补充
