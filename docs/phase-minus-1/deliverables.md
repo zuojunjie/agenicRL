@@ -7,13 +7,15 @@
 | # | 交付物 | 状态 | 验收标准 |
 |---|---|---|---|
 | 1 | Python 环境（uv + venv，Python 3.10） | ✅ **完成** | `import torch, transformers, datasets, requests` 通过；MPS 可用 |
-| 2 | Search-R1 仓库 clone + 代码通读 | 🟡 已 clone，待精读 | 能口述 agent loop 经过哪些代码文件 |
-| 3 | Wikipedia corpus + 预构建 retrieval index 下载 | ⏸ 待启动 | `e5_Flat.index` + `wiki-18.jsonl` 落盘 |
+| 2 | Search-R1 仓库 clone + 代码通读 | ✅ **完成** | 笔记落盘于 `notes/agent-loop.md`，掌握 infer.py + retrieval_server.py |
+| 3 | Wikipedia corpus + 预构建 retrieval index 下载 | ⏸ 待启动（夜间）| `e5_Flat.index` + `wiki-18.jsonl` 落盘 |
 | 4 | QA 数据集（NQ / HotpotQA dev） | ⏸ 待启动 | jsonl 落盘 |
-| 5 | CPU/MPS 烟雾测试：Qwen2.5-0.5B 跑通 agent loop | ⏸ 待启动 | 1 条样本完整跑完（不需要真检索，可 mock） |
-| 6 | AutoDL 账号 + 镜像选定 + 网盘开通 | ⏸ 待启动 | 账号充值，网盘 100GB 挂载 |
+| 5 | CPU/MPS 烟雾测试：Qwen2.5-0.5B 跑通 agent loop | ✅ **完成** | mock-search 版本 PASS, MPS 9.7 tok/s |
+| 6 | AutoDL 账号 + 镜像选定 + 网盘开通 | ⏸ 待启动（用户操作）| 账号充值，网盘 100GB 挂载 |
 | 7 | 一键启动脚本 `bootstrap.sh` | ⏸ 待写 | 新实例可达就绪状态 |
 | 8 | wandb 账号 + project + 命名规范 | ⏸ 待启动 | `wandb login` 通过 |
+
+**进度**：4/8 完成，剩 4 项里 #6 是用户实名操作、#3 是大下载，#4 #7 #8 都是 30 分钟内能搞定的轻活。
 
 ## 决策 A 已定锤 🟢
 
