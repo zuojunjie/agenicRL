@@ -29,6 +29,52 @@
 | 研发夜（多数） | ❌ | 1–3h | 写代码、读论文、看上次日志、设计实验 |
 | 训练夜（少数） | ✅ | 一次性 4–8h | 启动一次完整实验，跑完关机 |
 
+## ⚡ AutoDL 学术加速（关键技巧）
+
+**这条几乎所有 AutoDL 教程不写但必须做。**
+
+国内直连 `download.pytorch.org` / `huggingface.co` / `pypi.org` 有时极慢甚至超时。AutoDL 自带学术加速代理：
+
+```bash
+source /etc/network_turbo
+# 这一行设置 http_proxy=http://10.37.1.23:12798
+# 之后所有 pip / git / hf_hub_download / curl 都自动走加速
+```
+
+**实测教训**：第一次装 torch 没 source 这个，pip 卡了 9 分钟无进展。source 之后秒级响应。
+
+**含义**：
+- `cloud_setup.sh` 第一行就 `source /etc/network_turbo`
+- 每次新开 SSH session 装东西，都要先 source（不持久）
+- 仅限学术用途、AutoDL 不承诺稳定性，但实测对 PyPI/GitHub/HF 都生效
+
+## 无卡模式 = 省钱设置阶段
+
+AutoDL 实例可以在两个模式间切换：
+
+| 模式 | 价格 | 用途 |
+|---|---|---|
+| 无卡模式 | ~¥0.5/h | 装环境、下数据、写代码、debug |
+| 4×A100 满载 | ~¥45/h | **只在真训练时切过去** |
+
+**关键流程**：
+1. 创建实例时进入无卡模式
+2. 装好环境、下完模型 + 数据集 + index 到持久化盘
+3. 关机 → 改"开机（带卡）" → 训练
+4. 训练完 → 关机 → 切回无卡模式分析日志
+
+切换后端口会变（实测从 47992 → 45432），需要更新 `~/.ssh/config`。
+
+## 持久化盘 vs 系统盘
+
+| 路径 | 类型 | 是否持久 | 放什么 |
+|---|---|---|---|
+| `/root/`、`/root/miniconda3/` | 系统盘 | ✅ 跨停启 / ⚠️ 重置系统会丢 | conda env、个人配置 |
+| `/root/autodl-tmp/` | 持久化网盘（350GB） | ✅ **任何情况都不丢** | 代码、模型权重、数据集、index、ckpt |
+| `/autodl-pub/` | 公开数据集（7.3TB 只读） | 共享 | 不动 |
+
+我们的工作区 `/root/autodl-tmp/agenicRL/` 在持久化盘上，干净。
+
 ## 烟雾测试制度
 
 每次"真训练"前，**强制 5 分钟 smoke test**：
