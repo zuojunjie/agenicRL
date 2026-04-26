@@ -119,9 +119,57 @@ pkill -9 -f "pip install.*torch==2.4.0"  # 精确到具体的 pip 命令
 - 用 `grep --line-buffered` 流式过滤而不是 `tail`
 - 或者在 Mac 端开 Monitor 工具盯 `Successfully|ERROR|Downloading` 关键词
 
-## 总结：cloud_setup.sh 的"四个绝不"
+## 7. HuggingFace xet (xethub.hf.co) 401 拒绝
+
+**症状**：`huggingface_hub.snapshot_download(...)` 立刻报错：
+```
+RuntimeError: Data processing error: File reconstruction error:
+CAS Client Error: Request error: HTTP status client error (401 Unauthorized),
+domain: https://cas-server.xethub.hf.co/v1/reconstructions/...
+```
+
+**根因**：新版 huggingface_hub (≥0.25 左右) 默认对大文件用 xet 协议（HF 收购的去重 CAS 后端）下载提速。
+但 `cas-server.xethub.hf.co` 这个域名走 AutoDL 学术加速代理时被 401 拒绝（认证逻辑或代理转发问题）。
+
+**解法**：禁用 xet，强制走传统 HTTP：
+```bash
+export HF_HUB_DISABLE_XET=1
+export HF_ENDPOINT=https://hf-mirror.com   # 顺手用国内 HF 镜像，更稳
+```
+
+或在 Python 里 `os.environ['HF_HUB_DISABLE_XET'] = '1'` 在 `from huggingface_hub import ...` 之前。
+
+**实测**：禁用 xet 后 Qwen2.5-3B (~6GB) 立刻开始正常下载。
+
+## 8. SSH heredoc 引号嵌套陷阱
+
+**症状**：在 ssh remote 上想跑 `python -c "..."` 嵌套写在 bash 里，f-string 里的单引号被 outer shell 抢走解析：
+```
+/bin/bash: eval: line 71: syntax error near unexpected token `('
+```
+
+**根因**：bash → ssh → bash → python -c "..."，三层嵌套，单/双引号优先级混乱。
+
+**解法**：**绝不**在 ssh 命令里直接嵌入 python -c "..."。改成：
+1. 用 heredoc 写 `.py` 文件到 remote `/tmp/`
+2. 然后 `python /tmp/that_file.py`
+
+模板：
+```bash
+ssh host 'bash -s' <<'OUTER_EOF'
+cat > /tmp/myscript.py <<'PY_EOF'
+# 这里随便写 python，引号无忧
+print(f'time={time.time()}')
+PY_EOF
+python /tmp/myscript.py
+OUTER_EOF
+```
+
+## 总结：cloud_setup.sh 的"五个绝不"
 
 1. **绝不**忘 `source /etc/network_turbo`
 2. **绝不**用 `pkill -9 -f` 模糊匹配
 3. **绝不**对长流程加 `--quiet`
 4. **绝不**假设 R2 备份域名稳——准备 `--no-deps + 单独装 triton` 的 Plan B
+5. **绝不**忘 `export HF_HUB_DISABLE_XET=1` 在 hf 下载前
+6. **绝不**在 ssh 命令里直接 `python -c`，写到 `/tmp/*.py` 再调

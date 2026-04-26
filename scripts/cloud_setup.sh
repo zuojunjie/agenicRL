@@ -18,6 +18,13 @@ else
 fi
 
 # ============================================================
+# HuggingFace 下载关键环境：禁用 xet 协议（cas-server.xethub.hf.co 401）
+# 用国内 hf-mirror.com 镜像（更稳，AutoDL 学术加速对它特别友好）
+# ============================================================
+export HF_HUB_DISABLE_XET=1
+export HF_ENDPOINT=https://hf-mirror.com
+
+# ============================================================
 # 激活 conda env
 # ============================================================
 source /root/miniconda3/etc/profile.d/conda.sh
@@ -38,8 +45,30 @@ conda activate "${ENV_NAME}"
 # 例外：flash-attn 安装时会编译 CUDA 内核，需要 GPU 在场，因此延后
 # ============================================================
 echo "[setup] 1/4: torch 2.4.0+cu121"
-python -c "import torch" 2>/dev/null && echo "  (already installed: $(python -c 'import torch; print(torch.__version__)'))" \
-    || pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121
+if python -c "import torch" 2>/dev/null; then
+    echo "  (already installed: $(python -c 'import torch; print(torch.__version__)'))"
+else
+    # 走 R2 不稳定，用 Plan B：triton 从 PyPI Aliyun 镜像，torch 用 --no-deps
+    # 然后单独补 11 个 nvidia-cu12 wheel
+    pip install triton==3.0.0
+    pip install torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121 --no-deps \
+        --resume-retries 100 --timeout 120
+    pip install \
+        nvidia-cublas-cu12==12.1.3.1 \
+        nvidia-cuda-cupti-cu12==12.1.105 \
+        nvidia-cuda-nvrtc-cu12==12.1.105 \
+        nvidia-cuda-runtime-cu12==12.1.105 \
+        nvidia-cudnn-cu12==9.1.0.70 \
+        nvidia-cufft-cu12==11.0.2.54 \
+        nvidia-curand-cu12==10.3.2.106 \
+        nvidia-cusolver-cu12==11.4.5.107 \
+        nvidia-cusparse-cu12==12.1.0.106 \
+        nvidia-nccl-cu12==2.20.5 \
+        nvidia-nvtx-cu12==12.1.105 \
+        nvidia-nvjitlink-cu12 \
+        "filelock>=3.13" "typing-extensions>=4.8" "sympy>=1.13" \
+        "networkx>=3.0" "jinja2>=3.1" "fsspec>=2024"
+fi
 
 echo "[setup] 2/4: vllm 0.6.3"
 python -c "import vllm" 2>/dev/null && echo "  (already installed)" \

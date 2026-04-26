@@ -6,16 +6,16 @@
 
 | # | 交付物 | 状态 | 验收标准 |
 |---|---|---|---|
-| 1 | Python 环境（uv + venv，Python 3.10） | ✅ **完成** | `import torch, transformers, datasets, requests` 通过；MPS 可用 |
-| 2 | Search-R1 仓库 clone + 代码通读 | ✅ **完成** | 笔记落盘于 `notes/agent-loop.md`，掌握 infer.py + retrieval_server.py |
-| 3 | Wikipedia corpus + 预构建 retrieval index 下载 | ⏸ 待启动（夜间）| `e5_Flat.index` + `wiki-18.jsonl` 落盘 |
-| 4 | QA 数据集（NQ / HotpotQA dev） | ⏸ 待启动 | jsonl 落盘 |
-| 5 | CPU/MPS 烟雾测试：Qwen2.5-0.5B 跑通 agent loop | ✅ **完成** | mock-search 版本 PASS, MPS 9.7 tok/s |
-| 6 | AutoDL 账号 + 镜像选定 + 网盘开通 | ⏸ 待启动（用户操作）| 账号充值，网盘 100GB 挂载 |
-| 7 | 一键启动脚本 `bootstrap.sh` | ⏸ 待写 | 新实例可达就绪状态 |
-| 8 | wandb 账号 + project + 命名规范 | ⏸ 待启动 | `wandb login` 通过 |
+| 1 | Python 环境（本地 uv + 云端 conda searchr1） | ✅ **完成** | 本地：torch+MPS 可用；云端：torch 2.4.0+cu121 + vllm 0.6.3 + verl 全栈 import 通过 |
+| 2 | Search-R1 仓库 clone + 代码通读 | ✅ **完成** | 本地+云端都有，笔记落盘 `notes/agent-loop.md` |
+| 3 | Wikipedia corpus + 预构建 retrieval index 下载 | ⏳ **下载中**（云端） | `e5_Flat.index` + `wiki-18.jsonl` 80GB 进行中 |
+| 4 | QA 数据集（NQ / HotpotQA dev） | ⏸ 等 #3 完事再做 | jsonl 落盘 |
+| 5 | CPU/MPS 烟雾测试：Qwen2.5-0.5B 跑通 agent loop | ✅ **完成** | 本地 mock-search 版本 PASS, MPS 9.7 tok/s |
+| 6 | AutoDL 账号 + 镜像选定 + 网盘开通 | ✅ **完成** | 4×A100 实例已开（无卡模式中），350GB 持久化盘挂载 |
+| 7 | 一键启动脚本 `bootstrap.sh` | ✅ **完成** | `scripts/cloud_setup.sh` 集成所有踩坑经验 |
+| 8 | wandb 账号 + project + 命名规范 | ✅ **完成** | 用户已配置（key 在 ~/.netrc） |
 
-**进度**：4/8 完成，剩 4 项里 #6 是用户实名操作、#3 是大下载，#4 #7 #8 都是 30 分钟内能搞定的轻活。
+**进度**：7/8 完成，仅剩 #3 (Wikipedia 80GB 下载) 还在跑 + #4 (NQ 数据集处理，等 #3 完事)。
 
 ## 决策 A 已定锤 🟢
 
