@@ -1,0 +1,25 @@
+{
+  "uploaded_at": "2026-04-26T23:00:00+08:00",
+  "uploader": "lark-cli v1.0.19 (docs +create --api-version v2 --doc-format markdown)",
+  "owned_by": "user (左俊杰)",
+  "tenant_app": "cli_a964a6bda6f89bdd (lark-cli default app)",
+  "history": [
+    "First attempt (22:30): subAgent 1 used custom scripts/feishu_uploader.py with newly-created app cli_a964a2e703381bb4. The 6 docs were bot-owned, so user's lark-cli identity could not edit them. All deleted same evening.",
+    "Second attempt (23:00, this manifest): re-uploaded via lark-cli + user identity. User now owns docs, lark-doc skill fully usable for future edits."
+  ],
+  "master": {
+    "name": "AgenicRL · 项目知识中枢",
+    "source": "docs/feishu-export/00-master.md",
+    "doc_token": "NpM6d5qVNoaw6UxgNzIc6ZYRn1e",
+    "url": "https://my.feishu.cn/docx/NpM6d5qVNoaw6UxgNzIc6ZYRn1e"
+  },
+  "children": [
+    {"name": "决策档案 · 为什么这样做",         "source": "docs/feishu-export/01-decisions.md",          "doc_token": "TGYRdxgagolGv9xzj0Tc0oUsnfc", "url": "https://my.feishu.cn/docx/TGYRdxgagolGv9xzj0Tc0oUsnfc"},
+    {"name": "架构与阶段依赖",                   "source": "docs/feishu-export/02-architecture.md",       "doc_token": "J82yd1pjNo8yRBxMBf0c3sNGnvb", "url": "https://my.feishu.cn/docx/J82yd1pjNo8yRBxMBf0c3sNGnvb"},
+    {"name": "Search-R1 代码层心智模型",         "source": "docs/feishu-export/03-search-r1-internals.md","doc_token": "OFjzdpdPkoWPRgxFj3ScOcWpnIy", "url": "https://my.feishu.cn/docx/OFjzdpdPkoWPRgxFj3ScOcWpnIy"},
+    {"name": "云端运维大全 · 踩坑与传输实测",    "source": "docs/feishu-export/04-cloud-ops.md",          "doc_token": "SnS0dQXACo3iOKxSKJEcqJqyntd", "url": "https://my.feishu.cn/docx/SnS0dQXACo3iOKxSKJEcqJqyntd"},
+    {"name": "Phase -1 · 本地预热与里程碑",      "source": "docs/feishu-export/05-phase-minus-1.md",      "doc_token": "PKV2dOZnTod9A6xp3ohce0IfnMd", "url": "https://my.feishu.cn/docx/PKV2dOZnTod9A6xp3ohce0IfnMd"}
+  ],
+  "edit_recipe": "lark-cli docs +update --api-version v2 --doc <url> --command overwrite --doc-format markdown --content @docs/feishu-export/<file>.md",
+  "deprecated_redundant_app": "cli_a964a2e703381bb4 (created today by subAgent 1 in error; safe to delete from open.feishu.cn console + rm ~/.config/feishu/credentials.json)"
+}
