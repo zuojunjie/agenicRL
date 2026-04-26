@@ -202,7 +202,89 @@ OUTER_EOF
 
 **重要**：metadata API（list-files / repo-info）走 hf-mirror 不稳，但**直接 file URL 完全 OK**。所以混合策略：metadata 用 hf.co 拿，文件下载用 hf-mirror 自己拼 URL。
 
-## 总结：cloud_setup.sh 的"五个绝不"
+## 10. 本地→云上传通道实测（SCP / xftp / "文件存储网页")
+
+**触发场景**：评论区流传"AutoDL 直连 HF 慢，先本地下完再 xftp 传上去更快"。
+2026-04-26 实测验证此说法是否成立。
+
+### 测试方法
+
+```bash
+# 1. 造 1GB 随机数据（避免 SSH 压缩协议美化结果）
+dd if=/dev/urandom of=/tmp/test_1g.bin bs=1m count=1024
+# 1.88s 写完，569 MB/s（本地 SSD，无瓶颈）
+
+# 2. SCP 上传到 AutoDL 实例硬盘
+time scp /tmp/test_1g.bin autodl-agenicrl:/root/autodl-tmp/test_1g.bin
+# real 3m12.167s
+```
+
+测试环境：
+- 本地：MacBook，国内家用千兆光纤（具体上行套餐未知）
+- AutoDL 实例：西区 `connect.westd.seetacloud.com:45432`
+- 时间：周日晚 21:43，避开了工作时段拥塞
+
+### 实测结果
+
+```
+1024 MB / 192 s = 5.33 MB/s ≈ 42.7 Mbps
+```
+
+这个数字**恰好等于运营商默认对千兆光纤上行的限速**（30–50 Mbps 区间），说明瓶颈在**家用宽带上行**，不是 AutoDL 那一端。AutoDL 实例下行能力远超 5.33 MB/s（见 section 9 的 14 MB/s 实测）。
+
+### 与现有方案对比（HF→云路径）
+
+| 路径 | 速度 | 80GB 耗时 | 是否推荐 |
+|---|---|---|---|
+| HF → 云直连（parallel_dl.py + hf-mirror，section 9） | **12–14 MB/s** | ~55 min | 🟢 当前方案 |
+| HF → 本地 → 云（SCP/xftp） | 上限 ~5.3 MB/s | ≥4.3h（仅上传段） | 🔴 反而更慢 |
+| HF → 本地 → 云（AutoDL 文件存储网页上传） | 估 10–20 MB/s（未测） | 估 1–2.5h（仅上传段） | 🟡 仅当 SCP 不够时考虑 |
+
+**关键结论**：对于"HF 上的公开数据集 → AutoDL"这条路径，**parallel_dl.py 全面碾压本地中转**。评论的建议在 section 9 突破之前是对的，突破之后就过时了。
+
+### xftp 与 SCP 是同一通道（破除误解）
+
+评论里"xftp 传可能更快"是**错的**：
+- xftp = NetSarang 出品的 GUI 工具，底层协议是 **SFTP**（SSH File Transfer Protocol）
+- SFTP 跑在 **SSH 通道**上，与 `scp` 共用同一加密、压缩、TCP 连接
+- 速度差异最多 ±5%（取决于客户端的 pipeline 实现），不存在数量级提升
+
+真正快的应该是 **AutoDL "文件存储"（autodl-fs）的网页多线程上传** —— 它走 HTTPS + AutoDL 自家 CDN，不经 SSH。但只能浏览器手动拖文件，无法脚本化。
+
+### SCP 通道仍然是这些场景的正解
+
+虽然 HF→云 不该走它，但 **本地 artifact → 云** 的几类场景**只能**用 SCP：
+
+1. **训练 checkpoint 反向拖回本地**（云→本地，约 5–10 MB/s 实测预期）
+2. **自己改造的中等数据集上传**（< 30GB，HF 上没有）
+3. **代码同步**（git push/pull 走的就是 SSH，同通道）
+4. **临时调试文件**（< 1GB，一次性的）
+
+→ 此类场景按 5.33 MB/s 估算耗时即可。
+
+### 后续可优化路径（未实施）
+
+- **AutoDL "文件存储"（autodl-fs）** 网页上传：声称带 CDN 加速，理论 10–20 MB/s。挂载点 `/root/autodl-fs/` 跨实例共享、断机不丢数据，比 `/root/autodl-tmp/` 更适合大件素材。如未来需要传 ≥30GB 的本地素材，先试这条路。
+- **rsync 增量+压缩**：`rsync -avzP --partial` 替代 scp，断点续传更稳，但单连接上限同样卡在家用上行。
+- **运营商上行升级**：联通/电信支持解锁千兆对称（一般要换企业宽带），上行可到 100+ Mbps，那 SCP 路径才会真正快起来。
+
+### 操作要点 / 易踩坑
+
+```bash
+# ✅ 正确：测试用随机数据，避免压缩偏差
+dd if=/dev/urandom of=test.bin bs=1m count=1024
+
+# ❌ 错误：用 /dev/zero 测，SSH 压缩会假冒 100MB/s
+dd if=/dev/zero of=test.bin bs=1m count=1024
+
+# ✅ 正确：清理两端
+rm /tmp/test_1g.bin
+ssh autodl-agenicrl 'rm /root/autodl-tmp/test_1g.bin'
+
+# ❌ 错误：忘了清理云端，1GB 占着 350GB 持久盘空间
+```
+
+## 总结：cloud_setup.sh 的"七个绝不"
 
 1. **绝不**忘 `source /etc/network_turbo`
 2. **绝不**用 `pkill -9 -f` 模糊匹配
@@ -210,3 +292,4 @@ OUTER_EOF
 4. **绝不**假设 R2 备份域名稳——准备 `--no-deps + 单独装 triton` 的 Plan B
 5. **绝不**忘 `export HF_HUB_DISABLE_XET=1` 在 hf 下载前
 6. **绝不**在 ssh 命令里直接 `python -c`，写到 `/tmp/*.py` 再调
+7. **绝不**把"本地下完再 SCP/xftp"当作 HF→云加速方案——上行带宽是硬瓶颈，已被 parallel_dl.py 碾压
