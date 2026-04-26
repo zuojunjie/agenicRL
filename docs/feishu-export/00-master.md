@@ -1,6 +1,7 @@
 # AgenicRL · 项目知识中枢
 
-> **这是一份 master doc**：只放导航 + 全局状态 + 术语表。所有细节都在 5 个子 doc 里，互不重叠。
+> **位置**：飞书知识库 [AgenicRL](https://my.feishu.cn/wiki/Rjmqwq3jNiIXG8kp9gtcOghQnpb) / space_id `7633083555685370834`
+> **本文 = 知识库首页**：只放导航 + 全局状态 + 术语表。所有细节都在 5 个子节点里，互不重叠。
 > **维护原则**：每个子 doc 单一职责；master 只更新进度和子 doc 索引；**禁止把内容写在 master 里**。
 
 ---
@@ -40,11 +41,11 @@
 
 | # | 子 doc | 一句话职责 | 维护人 |
 |---|---|---|---|
-| 01 | [决策档案](https://my.feishu.cn/docx/TGYRdxgagolGv9xzj0Tc0oUsnfc) | 为什么是 Search-R1 / 5+2 论文路径 / 4×A100 + 3B 算力配置 | master agent |
-| 02 | [架构与阶段依赖](https://my.feishu.cn/docx/J82yd1pjNo8yRBxMBf0c3sNGnvb) | Phase 0–5 DAG · trunk 共享产物 · git/wandb 命名规范 | master agent |
-| 03 | [Search-R1 心智模型](https://my.feishu.cn/docx/OFjzdpdPkoWPRgxFj3ScOcWpnIy) | 60 行 agent loop · 两进程架构 · 与 GRPO 的连接 · 后续 phase 在哪改 | master agent |
-| 04 | [云端运维大全](https://my.feishu.cn/docx/SnS0dQXACo3iOKxSKJEcqJqyntd) | AutoDL / HF / SSH / SCP 全部踩坑（§1–§9 master，§10 subAgent 1） | master + subAgent 1 |
-| 05 | [Phase -1 进度档](https://my.feishu.cn/docx/PKV2dOZnTod9A6xp3ohce0IfnMd) | 8 项交付物 · kickoff 摘要 · 镜像保存策略 | master agent |
+| 01 | [决策档案](https://my.feishu.cn/wiki/DXqmwZ8VOivhTZkySxYc1O0onHd) | 为什么是 Search-R1 / 5+2 论文路径 / 4×A100 + 3B 算力配置 | master agent |
+| 02 | [架构与阶段依赖](https://my.feishu.cn/wiki/PdXTwNPwTiSa4Kk4DSgcJZd1nrd) | Phase 0–5 DAG · trunk 共享产物 · git/wandb 命名规范 | master agent |
+| 03 | [Search-R1 心智模型](https://my.feishu.cn/wiki/Sj1cwJ7mLiuRuKkE3IucXINInZc) | 60 行 agent loop · 两进程架构 · 与 GRPO 的连接 · 后续 phase 在哪改 | master agent |
+| 04 | [云端运维大全](https://my.feishu.cn/wiki/YYk1wwEZqiwRX4kUUoXczVRWn1b) | AutoDL / HF / SSH / SCP 全部踩坑（§1–§9 master，§10 subAgent 1） | master + subAgent 1 |
+| 05 | [Phase -1 进度档](https://my.feishu.cn/wiki/Hgp7wyGoFi5wVBkYRFcclX3Onwg) | 8 项交付物 · kickoff 摘要 · 镜像保存策略 | master agent |
 
 ---
 
@@ -98,17 +99,19 @@
 ## 维护元信息
 
 - 最后一次重写：2026-04-26（subAgent 1 `sweet-archimedes-7376d4` 在飞书首次落盘）
+- 当晚迁移到飞书知识库 `AgenicRL`（space_id `7633083555685370834`），主从层级建好
 - 源码版本：`docs/feishu-export/` @ git commit
-- Feishu doc tokens 留底：`docs/feishu-export/UPLOAD_MANIFEST.json`
+- Feishu doc tokens + wiki node tokens 留底：`docs/feishu-export/UPLOAD_MANIFEST.json`
 
 ### 后续怎么改这套 doc
 
-**唯一推荐路径 — `lark-cli` + 内置 `lark-doc` skill**（user 身份，已 `auth login`，全功能）：
+**唯一推荐路径 — `lark-cli` + `lark-doc` / `lark-wiki` skill**（user 身份，已 `auth login`）：
 
 ```bash
 # 整篇覆盖（最常用 — 改完本地 .md 后同步到飞书）
+# wiki URL 和 docx URL 都行，CLI 会自动解析
 lark-cli docs +update --api-version v2 \
-    --doc "https://my.feishu.cn/docx/<doc_token>" \
+    --doc "https://my.feishu.cn/wiki/<node_token>" \
     --command overwrite --doc-format markdown \
     --content "@docs/feishu-export/04-cloud-ops.md"
 
@@ -120,15 +123,21 @@ lark-cli docs +update --api-version v2 --doc "..." \
 lark-cli docs +update --api-version v2 --doc "..." \
     --command append --content '<p>新章节</p>'
 
-# 删除
-lark-cli drive +delete --file-token <doc_token> --type docx --yes
+# 在知识库下挂一个新子节点（第 7 篇子 doc）
+lark-cli wiki +node-create --api-version v2 \
+    --space-id 7633083555685370834 \
+    --parent-node-token Rjmqwq3jNiIXG8kp9gtcOghQnpb \
+    --title "06-foo" --obj-type docx
+# 拿到新 node 后再用 docs +update overwrite 灌内容
 
-# 创建新 doc（如果你写了第 7 个子文档）
-lark-cli docs +create --api-version v2 --doc-format markdown \
-    --content "@docs/feishu-export/06-foo.md"
+# 把已有的散落 docx 收编进知识库
+lark-cli wiki +move \
+    --obj-type docx --obj-token <doc_token> \
+    --target-space-id 7633083555685370834 \
+    --target-parent-token Rjmqwq3jNiIXG8kp9gtcOghQnpb
 ```
 
-详细见 `~/.claude/skills/lark-doc/SKILL.md` 及其 references。
+详细见 `~/.claude/skills/lark-doc/SKILL.md` 和 `~/.claude/skills/lark-wiki/SKILL.md`。
 
 ### 关于 `scripts/feishu_uploader.py`（已弃用，保留作历史参考）
 

@@ -1,25 +1,39 @@
 {
-  "uploaded_at": "2026-04-26T23:00:00+08:00",
-  "uploader": "lark-cli v1.0.19 (docs +create --api-version v2 --doc-format markdown)",
+  "uploaded_at": "2026-04-26T23:30:00+08:00",
+  "uploader": "lark-cli v1.0.19 (docs + wiki shortcuts)",
   "owned_by": "user (左俊杰)",
   "tenant_app": "cli_a964a6bda6f89bdd (lark-cli default app)",
+  "wiki_space": {
+    "name": "AgenicRL",
+    "space_id": "7633083555685370834",
+    "space_type": "team",
+    "visibility": "private",
+    "description": "Agentic RL 学习项目知识中枢 — Search-R1 路径",
+    "url": "https://my.feishu.cn/wiki/Rjmqwq3jNiIXG8kp9gtcOghQnpb"
+  },
   "history": [
-    "First attempt (22:30): subAgent 1 used custom scripts/feishu_uploader.py with newly-created app cli_a964a2e703381bb4. The 6 docs were bot-owned, so user's lark-cli identity could not edit them. All deleted same evening.",
-    "Second attempt (23:00, this manifest): re-uploaded via lark-cli + user identity. User now owns docs, lark-doc skill fully usable for future edits."
+    "22:30 — subAgent 1 wrote scripts/feishu_uploader.py and uploaded 6 docs via newly-created bot app cli_a964a2e7... All bot-owned, user could not edit. Deleted.",
+    "23:00 — re-uploaded via lark-cli + user identity into 我的空间 root. Editable, but flat (no hierarchy).",
+    "23:30 — created Wiki space 'AgenicRL', moved all 6 docs into it. Master at root, 5 children nested under master. lark-cli edit verified ✓ on wiki URL."
   ],
   "master": {
     "name": "AgenicRL · 项目知识中枢",
     "source": "docs/feishu-export/00-master.md",
     "doc_token": "NpM6d5qVNoaw6UxgNzIc6ZYRn1e",
-    "url": "https://my.feishu.cn/docx/NpM6d5qVNoaw6UxgNzIc6ZYRn1e"
+    "wiki_node_token": "Rjmqwq3jNiIXG8kp9gtcOghQnpb",
+    "url": "https://my.feishu.cn/wiki/Rjmqwq3jNiIXG8kp9gtcOghQnpb"
   },
   "children": [
-    {"name": "决策档案 · 为什么这样做",         "source": "docs/feishu-export/01-decisions.md",          "doc_token": "TGYRdxgagolGv9xzj0Tc0oUsnfc", "url": "https://my.feishu.cn/docx/TGYRdxgagolGv9xzj0Tc0oUsnfc"},
-    {"name": "架构与阶段依赖",                   "source": "docs/feishu-export/02-architecture.md",       "doc_token": "J82yd1pjNo8yRBxMBf0c3sNGnvb", "url": "https://my.feishu.cn/docx/J82yd1pjNo8yRBxMBf0c3sNGnvb"},
-    {"name": "Search-R1 代码层心智模型",         "source": "docs/feishu-export/03-search-r1-internals.md","doc_token": "OFjzdpdPkoWPRgxFj3ScOcWpnIy", "url": "https://my.feishu.cn/docx/OFjzdpdPkoWPRgxFj3ScOcWpnIy"},
-    {"name": "云端运维大全 · 踩坑与传输实测",    "source": "docs/feishu-export/04-cloud-ops.md",          "doc_token": "SnS0dQXACo3iOKxSKJEcqJqyntd", "url": "https://my.feishu.cn/docx/SnS0dQXACo3iOKxSKJEcqJqyntd"},
-    {"name": "Phase -1 · 本地预热与里程碑",      "source": "docs/feishu-export/05-phase-minus-1.md",      "doc_token": "PKV2dOZnTod9A6xp3ohce0IfnMd", "url": "https://my.feishu.cn/docx/PKV2dOZnTod9A6xp3ohce0IfnMd"}
+    {"name": "决策档案 · 为什么这样做",         "source": "docs/feishu-export/01-decisions.md",          "doc_token": "TGYRdxgagolGv9xzj0Tc0oUsnfc", "wiki_node_token": "DXqmwZ8VOivhTZkySxYc1O0onHd", "url": "https://my.feishu.cn/wiki/DXqmwZ8VOivhTZkySxYc1O0onHd"},
+    {"name": "架构与阶段依赖",                   "source": "docs/feishu-export/02-architecture.md",       "doc_token": "J82yd1pjNo8yRBxMBf0c3sNGnvb", "wiki_node_token": "PdXTwNPwTiSa4Kk4DSgcJZd1nrd", "url": "https://my.feishu.cn/wiki/PdXTwNPwTiSa4Kk4DSgcJZd1nrd"},
+    {"name": "Search-R1 代码层心智模型",         "source": "docs/feishu-export/03-search-r1-internals.md","doc_token": "OFjzdpdPkoWPRgxFj3ScOcWpnIy", "wiki_node_token": "Sj1cwJ7mLiuRuKkE3IucXINInZc", "url": "https://my.feishu.cn/wiki/Sj1cwJ7mLiuRuKkE3IucXINInZc"},
+    {"name": "云端运维大全 · 踩坑与传输实测",    "source": "docs/feishu-export/04-cloud-ops.md",          "doc_token": "SnS0dQXACo3iOKxSKJEcqJqyntd", "wiki_node_token": "YYk1wwEZqiwRX4kUUoXczVRWn1b", "url": "https://my.feishu.cn/wiki/YYk1wwEZqiwRX4kUUoXczVRWn1b"},
+    {"name": "Phase -1 · 本地预热与里程碑",      "source": "docs/feishu-export/05-phase-minus-1.md",      "doc_token": "PKV2dOZnTod9A6xp3ohce0IfnMd", "wiki_node_token": "Hgp7wyGoFi5wVBkYRFcclX3Onwg", "url": "https://my.feishu.cn/wiki/Hgp7wyGoFi5wVBkYRFcclX3Onwg"}
   ],
-  "edit_recipe": "lark-cli docs +update --api-version v2 --doc <url> --command overwrite --doc-format markdown --content @docs/feishu-export/<file>.md",
+  "edit_recipe": {
+    "update_existing": "lark-cli docs +update --api-version v2 --doc <wiki_url> --command overwrite --doc-format markdown --content @docs/feishu-export/<file>.md",
+    "add_new_child": "lark-cli wiki +node-create --space-id 7633083555685370834 --parent-node-token Rjmqwq3jNiIXG8kp9gtcOghQnpb --title <title> --obj-type docx",
+    "import_external_doc": "lark-cli wiki +move --obj-type docx --obj-token <doc_token> --target-space-id 7633083555685370834 --target-parent-token Rjmqwq3jNiIXG8kp9gtcOghQnpb"
+  },
   "deprecated_redundant_app": "cli_a964a2e703381bb4 (created today by subAgent 1 in error; safe to delete from open.feishu.cn console + rm ~/.config/feishu/credentials.json)"
 }
