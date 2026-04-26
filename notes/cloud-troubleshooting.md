@@ -179,6 +179,29 @@ python /tmp/myscript.py
 OUTER_EOF
 ```
 
+## 9. 突破：hf-mirror.com + 8 路并发 = 6× 加速
+
+**症状**：AutoDL 学术加速代理对 hf.co 限速 ~430 KB/s，单连接无法提速。
+
+**关键发现**：
+- 走 `/etc/network_turbo` 代理：430 KB/s
+- 直连 hf.co：被墙
+- **直连 hf-mirror.com**：2 MB/s
+- **直连 hf-mirror.com + 8 路并发 range 请求**：**12 MB/s ⭐**
+
+**为什么只有 hf-mirror.com 有效**：
+- AutoDL 网络对 hf-mirror.com (国内 GitHub Pages 代理) 走专线优化
+- hf-mirror 透传 hf.co file URL（同样的 `/datasets/USER/REPO/resolve/main/FILE` 格式）
+- 单连接被 hf-mirror 限速 ~2 MB/s，但允许多并发
+
+**实操**：写一个 Python 多线程 range 下载器（见 `scripts/parallel_dl.py`），不走代理，直接 hf-mirror.com，8 个 worker 拆分 byte range 并行 GET。
+
+**性能数据**（80GB Wiki + 索引）：
+- 之前 hf_hub_download + 代理：估算 11h 完成
+- 改用 parallel_dl.py + hf-mirror：**~55 分钟完成** 6×
+
+**重要**：metadata API（list-files / repo-info）走 hf-mirror 不稳，但**直接 file URL 完全 OK**。所以混合策略：metadata 用 hf.co 拿，文件下载用 hf-mirror 自己拼 URL。
+
 ## 总结：cloud_setup.sh 的"五个绝不"
 
 1. **绝不**忘 `source /etc/network_turbo`
