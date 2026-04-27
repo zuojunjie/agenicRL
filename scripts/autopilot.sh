@@ -66,14 +66,22 @@ MAX_STEPS=2 TEST_FREQ=1 SAVE_FREQ=2 \
 SMOKE_RC=${PIPESTATUS[0]}
 SMOKE_DUR=$(( $(date +%s) - SMOKE_START ))
 
-if [ $SMOKE_RC -ne 0 ]; then
-    append_brief "❌ smoke test 失败 (exit=$SMOKE_RC, ${SMOKE_DUR}s)"
-    append_brief "log tail:\n\`\`\`\n$(tail -30 /tmp/smoke.log)\n\`\`\`"
+# hydra 错误也走 exit 0，所以单看 exit code 不够
+# 也要检查 log 里是否有 "Error executing job" 或 "Traceback"
+SMOKE_ERR=0
+if [ $SMOKE_RC -ne 0 ]; then SMOKE_ERR=1; fi
+if grep -qE "Error executing job|^Traceback|RuntimeError|OutOfMemoryError" /tmp/smoke.log 2>/dev/null; then SMOKE_ERR=1; fi
+# 训练正常会跑 ≥30s（rollout + grad），如果 <30s 必失败
+if [ $SMOKE_DUR -lt 30 ]; then SMOKE_ERR=1; fi
+
+if [ $SMOKE_ERR -ne 0 ]; then
+    append_brief "❌ smoke test 失败 (exit=$SMOKE_RC, ${SMOKE_DUR}s, err markers detected)"
+    append_brief "log tail:\n\`\`\`\n$(tail -40 /tmp/smoke.log)\n\`\`\`"
     say "smoke test failed, aborting real training"
 
     # 收集诊断信息
     append_brief "\n### 诊断快照"
-    append_brief "GPU 状态:\n\`\`\`\n$(nvidia-smi)\n\`\`\`"
+    append_brief "GPU 状态:\n\`\`\`\n$(nvidia-smi 2>&1)\n\`\`\`"
     exit 2
 fi
 

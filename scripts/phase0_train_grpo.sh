@@ -26,9 +26,8 @@ conda activate searchr1
 # ============================================================
 # 配置
 # ============================================================
-# retrieval_server 占 GPU 3，训练用 GPU 0-2（3 卡 FSDP）
-# 4090 无 NVLink，让出 1 张给 retrieval 比 4 卡同时跑更省心
-export CUDA_VISIBLE_DEVICES=0,1,2
+# 4 卡都用：retrieval shard 8GB/卡 + vllm 28GB/卡 + actor activations ~5GB ≈ 41GB（< 48GB OK）
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 export DATA_DIR='/root/autodl-tmp/data/nq_search'
 export BASE_MODEL='/root/autodl-tmp/models/Qwen2.5-3B-Instruct'
 export EXPERIMENT_NAME=phase0-nq-grpo-qwen2.5-3b-it-em
@@ -45,6 +44,9 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 MAX_STEPS=${MAX_STEPS:-1005}
 TEST_FREQ=${TEST_FREQ:-50}
 SAVE_FREQ=${SAVE_FREQ:-100}
+
+# Logger: console (默认，无 wandb 依赖) 或 wandb (需 WANDB_API_KEY env var)
+LOGGER=${LOGGER:-console}
 
 # ============================================================
 # 启动前检查
@@ -97,11 +99,11 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.n_agent=5 \
     actor_rollout_ref.rollout.temperature=1 \
     actor_rollout_ref.actor.state_masking=true \
-    trainer.logger=['wandb'] \
+    trainer.logger=[$LOGGER] \
     +trainer.val_only=false \
     +trainer.val_before_train=true \
     trainer.default_hdfs_dir=null \
-    trainer.n_gpus_per_node=3 \
+    trainer.n_gpus_per_node=4 \
     trainer.nnodes=1 \
     trainer.save_freq=$SAVE_FREQ \
     trainer.test_freq=$TEST_FREQ \
