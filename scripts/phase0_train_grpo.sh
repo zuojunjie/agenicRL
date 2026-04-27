@@ -31,7 +31,7 @@ export CUDA_VISIBLE_DEVICES=${TRAIN_GPUS:-0,1,2,3}
 N_GPUS=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 export DATA_DIR='/root/autodl-tmp/data/nq_search'
 export BASE_MODEL='/root/autodl-tmp/models/Qwen2.5-3B-Instruct'
-export EXPERIMENT_NAME=phase0-nq-grpo-qwen2.5-3b-it-em
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-phase0-nq-grpo-qwen2.5-3b-it-em}
 export WAND_PROJECT='agentic-rl-search'
 
 # 4090 无 NVLink — 强制 NCCL 走 socket 而不是 P2P
@@ -45,9 +45,11 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
 # 允许命令行覆盖 max_steps 用作 smoke test
-MAX_STEPS=${MAX_STEPS:-1005}
-TEST_FREQ=${TEST_FREQ:-50}
-SAVE_FREQ=${SAVE_FREQ:-100}
+MAX_STEPS=${MAX_STEPS:-50}
+# ⚠️ SAVE_FREQ 默认 10（不再 100）——Phase 0d 教训：OOM 时损失太多 step
+# 详见 memory/ckpt_save_lessons.md
+SAVE_FREQ=${SAVE_FREQ:-10}
+TEST_FREQ=${TEST_FREQ:-10}
 
 # Logger: console (默认，无 wandb 依赖) 或 wandb (需 WANDB_API_KEY env var)
 LOGGER=${LOGGER:-console}
