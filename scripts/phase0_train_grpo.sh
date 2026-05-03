@@ -26,14 +26,46 @@ conda activate searchr1
 # ============================================================
 # 配置
 # ============================================================
-export CUDA_VISIBLE_DEVICES=0,1,2,3                              # 4×A100，不是 8
-export DATA_DIR='/root/autodl-tmp/data/nq_search'                # 本地 NQ parquet
-export BASE_MODEL='/root/autodl-tmp/models/Qwen2.5-3B-Instruct'  # 本地模型，不重下
-export EXPERIMENT_NAME=phase0-nq-grpo-qwen2.5-3b-it-em
+# GPU 选择：默认 4 卡共享 retrieval，可以改 TRAIN_GPUS=0,1,2 把 retrieval 独占到 GPU 3
+export CUDA_VISIBLE_DEVICES=${TRAIN_GPUS:-0,1,2,3}
+N_GPUS=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
+export DATA_DIR='/root/autodl-tmp/data/nq_search'
+export BASE_MODEL='/root/autodl-tmp/models/Qwen2.5-3B-Instruct'
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-phase0-nq-grpo-qwen2.5-3b-it-em}
 export WAND_PROJECT='agentic-rl-search'
+
+# 4090 无 NVLink — 强制 NCCL 走 socket 而不是 P2P
+export NCCL_P2P_DISABLE=1
+export NCCL_IB_DISABLE=1
+
+# 减少 GPU 显存碎片（OOM 错误推荐的设置）
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # vllm 与 qwen2 的 flash_attn 兼容性问题，强制 XFORMERS
 export VLLM_ATTENTION_BACKEND=XFORMERS
+
+# 允许命令行覆盖 max_steps 用作 smoke test
+MAX_STEPS=${MAX_STEPS:-50}
+# ⚠️ SAVE_FREQ 默认 10（不再 100）——Phase 0d 教训：OOM 时损失太多 step
+# 详见 memory/ckpt_save_lessons.md
+SAVE_FREQ=${SAVE_FREQ:-10}
+TEST_FREQ=${TEST_FREQ:-10}
+
+# Logger: console (默认，无 wandb 依赖) 或 wandb (需 WANDB_API_KEY env var)
+LOGGER=${LOGGER:-console}
+
+# FSDP offload 模式：
+#   full     - param + grad + optim 全 offload 到 CPU（默认，4 卡共享 retrieval 时用）
+#   minimal  - 只 optim offload（params/grads 在 GPU，actor update 提速 30-50%，需 dedicated retrieval 留出显存）
+#   none     - 全在 GPU（最快但显存吃紧）
+FSDP_MODE=${FSDP_MODE:-full}
+case "$FSDP_MODE" in
+    full)    PARAM_OFF=true;  GRAD_OFF=true;  OPTIM_OFF=true ;;
+    minimal) PARAM_OFF=false; GRAD_OFF=false; OPTIM_OFF=true ;;
+    none)    PARAM_OFF=false; GRAD_OFF=false; OPTIM_OFF=false ;;
+    *) echo "❌ unknown FSDP_MODE=$FSDP_MODE"; exit 1 ;;
+esac
+echo "[config] CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES (n_gpus=$N_GPUS), FSDP_MODE=$FSDP_MODE"
 
 # ============================================================
 # 启动前检查
@@ -71,33 +103,33 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.use_kl_loss=true \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
     actor_rollout_ref.actor.ppo_micro_batch_size=64 \
-    actor_rollout_ref.actor.fsdp_config.param_offload=true \
-    actor_rollout_ref.actor.fsdp_config.grad_offload=true \
-    actor_rollout_ref.actor.fsdp_config.optimizer_offload=true \
+    actor_rollout_ref.actor.fsdp_config.param_offload=$PARAM_OFF \
+    actor_rollout_ref.actor.fsdp_config.grad_offload=$GRAD_OFF \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=$OPTIM_OFF \
     actor_rollout_ref.rollout.log_prob_micro_batch_size=128 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
     actor_rollout_ref.ref.log_prob_micro_batch_size=128 \
-    actor_rollout_ref.ref.fsdp_config.param_offload=True \
+    actor_rollout_ref.ref.fsdp_config.param_offload=$PARAM_OFF \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     algorithm.no_think_rl=false \
     actor_rollout_ref.rollout.n_agent=5 \
     actor_rollout_ref.rollout.temperature=1 \
     actor_rollout_ref.actor.state_masking=true \
-    trainer.logger=['wandb'] \
+    trainer.logger=[$LOGGER] \
     +trainer.val_only=false \
     +trainer.val_before_train=true \
     trainer.default_hdfs_dir=null \
-    trainer.n_gpus_per_node=4 \
+    trainer.n_gpus_per_node=$N_GPUS \
     trainer.nnodes=1 \
-    trainer.save_freq=100 \
-    trainer.test_freq=50 \
+    trainer.save_freq=$SAVE_FREQ \
+    trainer.test_freq=$TEST_FREQ \
     trainer.project_name=$WAND_PROJECT \
     trainer.experiment_name=$EXPERIMENT_NAME \
     trainer.total_epochs=15 \
-    trainer.total_training_steps=1005 \
+    trainer.total_training_steps=$MAX_STEPS \
     trainer.default_local_dir=verl_checkpoints/$EXPERIMENT_NAME \
     max_turns=2 \
     retriever.url="http://127.0.0.1:8000/retrieve" \
