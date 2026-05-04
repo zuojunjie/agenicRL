@@ -1,0 +1,18 @@
+# 部署 main_ppo_torl.py 的最简方法（云端）
+#
+# 1. 把 main_ppo_format.py 复制为 main_ppo_torl.py
+# 2. 改 4 处：
+#    a. import 加 qa_em_torl
+#    b. _select_rm_score_fn 路由到 qa_em_torl
+#    c. 不动 RewardManager 签名（兼容已有 reward_model.* 字段）
+#
+# 部署命令：
+#
+# ssh autodl-agenicrl '
+# cd /root/autodl-tmp/external/Search-R1/verl/trainer
+# cp main_ppo_format.py main_ppo_torl.py
+# sed -i "s|from verl.utils.reward_score import qa_em, qa_em_format|from verl.utils.reward_score import qa_em, qa_em_format, qa_em_torl|" main_ppo_torl.py
+# sed -i "s|return qa_em_format.compute_score_em|return qa_em_torl.compute_score_em|" main_ppo_torl.py
+# echo "✅ main_ppo_torl.py 已建好"
+# grep -n "qa_em_torl" main_ppo_torl.py
+# '

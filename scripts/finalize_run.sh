@@ -49,6 +49,25 @@ else
 fi
 
 echo
+echo "===== 剪枝中间 ckpts，仅保留最大 step（节省磁盘） ====="
+# 策略：训练成功完成后，只有最后一个 ckpt 有用（作为下一 phase warm-start 起点）
+# 中间 ckpt 可以删除，每个 ~13G。set KEEP_ALL_CKPTS=1 跳过剪枝
+if [ "${KEEP_ALL_CKPTS:-0}" != "1" ] && [ -d "$OUT/ckpts" ]; then
+    # 找最大 step 的 ckpt 目录
+    LAST_CKPT=$(ls -d "$OUT/ckpts/global_step_"* 2>/dev/null | sort -t_ -k3 -n | tail -1)
+    if [ -n "$LAST_CKPT" ]; then
+        echo "保留: $(basename $LAST_CKPT)"
+        for d in "$OUT/ckpts/global_step_"*; do
+            if [ "$d" != "$LAST_CKPT" ]; then
+                echo "  删除中间 ckpt: $(basename $d) ($(du -sh $d | cut -f1))"
+                rm -rf "$d"
+            fi
+        done
+        echo "剪枝后 ckpts 总占用: $(du -sh $OUT/ckpts | cut -f1)"
+    fi
+fi
+
+echo
 echo "===== 拷训练 log ====="
 if [ -f "$LOG_SRC" ]; then
     cp "$LOG_SRC" "$OUT/training.log"

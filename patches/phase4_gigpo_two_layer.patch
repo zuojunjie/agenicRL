@@ -1,0 +1,58 @@
+# Phase 4 GiGPO — Group-in-Group PO（两层 advantage 归一化）
+#
+# 核心 idea:
+#   GRPO  adv = (r - mean_within_prompt) / std_within_prompt              [单层]
+#   GiGPO adv = α · inner_adv + (1-α) · outer_adv                          [双层]
+#       inner = 同 prompt 内 z-score（与 GRPO 相同）
+#       outer = prompt 间 mean 用整 batch 做 baseline
+#
+# 论文动机：单层 GRPO 在 prompt 难度差异大时方差爆炸；
+#   双层把"prompt 难度差异"也算进 advantage，让 update 更稳定
+#
+# 部署:
+#   cd /root/autodl-tmp/external/Search-R1
+#   patch -p1 < /root/autodl-tmp/agenicRL/patches/phase4_gigpo_two_layer.patch
+#
+# CLI 用法:
+#   `+algorithm.gigpo_alpha=0.7` (推荐)
+#   省略 → 退化为 vanilla GRPO（向后兼容）
+
+--- a/verl/trainer/ppo/core_algos.py
++++ b/verl/trainer/ppo/core_algos.py
+@@ -111,7 +111,7 @@ def compute_gae_advantage_return(token_level_rewards: torch.Tensor, values: torc
+ def compute_grpo_outcome_advantage(token_level_rewards: torch.Tensor,
+                                    eos_mask: torch.Tensor,
+                                    index: torch.Tensor,
+-                                   epsilon: float = 1e-6):
++                                   epsilon: float = 1e-6,
++                                   gigpo_alpha: float = None):
+     """
+     Compute advantage for GRPO, operating only on Outcome reward
+     (with only one scalar reward for each response).
+@@ -147,9 +148,28 @@ def compute_grpo_outcome_advantage(token_level_rewards: torch.Tensor,
+                 id2std[idx] = torch.std(torch.tensor([id2score[idx]]))
+             else:
+                 raise ValueError(f"no score in prompt index: {idx}")
+-        for i in range(bsz):
+-            scores[i] = (scores[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
+-        scores = scores.unsqueeze(-1).tile([1, response_length]) * eos_mask
++
++        inner_adv = scores.clone()
++        for i in range(bsz):
++            inner_adv[i] = (scores[i] - id2mean[index[i]]) / (id2std[index[i]] + epsilon)
++
++        if gigpo_alpha is None or gigpo_alpha >= 1.0:
++            final_adv = inner_adv
++        else:
++            prompt_means = torch.tensor(list(id2mean.values()))
++            outer_mean = prompt_means.mean()
++            outer_std = prompt_means.std() + epsilon
++            outer_adv = scores.clone()
++            for i in range(bsz):
++                outer_adv[i] = (id2mean[index[i]] - outer_mean) / outer_std
++            final_adv = gigpo_alpha * inner_adv + (1 - gigpo_alpha) * outer_adv
++
++        scores = final_adv.unsqueeze(-1).tile([1, response_length]) * eos_mask
+
+     return scores, scores
+

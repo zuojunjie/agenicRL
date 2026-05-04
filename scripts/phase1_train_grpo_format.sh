@@ -45,10 +45,10 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
 # 允许命令行覆盖 max_steps 用作 smoke test
-MAX_STEPS=${MAX_STEPS:-52}     # 2026-04-28 改：50 步循环退出在 step 49，step 50 没 ckpt+val。用 52 让 step 50 完整存在。
+MAX_STEPS=${MAX_STEPS:-50}
 # ⚠️ SAVE_FREQ 默认 10（不再 100）——Phase 0d 教训：OOM 时损失太多 step
 # 详见 memory/ckpt_save_lessons.md
-SAVE_FREQ=${SAVE_FREQ:-10}     # 2026-04-27 Phase 0e 后调整：5 太碎 → 10（每 ~1h ckpt 1 次，损失上界 10 步 ≈ ¥10）
+SAVE_FREQ=${SAVE_FREQ:-10}
 TEST_FREQ=${TEST_FREQ:-10}
 
 # Logger: console (默认，无 wandb 依赖) 或 wandb (需 WANDB_API_KEY env var)
@@ -82,7 +82,7 @@ mkdir -p verl_checkpoints
 # ============================================================
 # 训练（参数大体对齐 Search-R1 论文 v0.2 配方）
 # ============================================================
-PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
+PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo_format \
     data.train_files=$DATA_DIR/train.parquet \
     data.val_files=$DATA_DIR/test.parquet \
     data.train_data_num=null \
@@ -102,14 +102,14 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.optim.lr_warmup_steps_ratio=0.285 \
     actor_rollout_ref.actor.use_kl_loss=true \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
-    actor_rollout_ref.actor.ppo_micro_batch_size=64 \
+    actor_rollout_ref.actor.ppo_micro_batch_size=32 \
     actor_rollout_ref.actor.fsdp_config.param_offload=$PARAM_OFF \
     actor_rollout_ref.actor.fsdp_config.grad_offload=$GRAD_OFF \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=$OPTIM_OFF \
     actor_rollout_ref.rollout.log_prob_micro_batch_size=128 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.3 \
     actor_rollout_ref.ref.log_prob_micro_batch_size=128 \
     actor_rollout_ref.ref.fsdp_config.param_offload=$PARAM_OFF \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \

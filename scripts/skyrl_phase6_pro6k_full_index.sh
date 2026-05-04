@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# SkyRL Phase 6 = E (vanilla clip) on PRO 6000 single card with FULL e5_Flat index
+#
+# Stack rationale (vs failed verl Stack A):
+#   - SkyRL native sm_120 + native GSPO (policy_loss_type="gspo")
+#   - Single card → no FSDP all-gather → no multi-GPU comm overhead
+#   - e5_Flat FP16 sharded onto same GPU → ~30GB index, ~60GB train budget
+#   - smoke v23 already proved SkyRL works on PRO 6000 (85 step / 16 min)
+#
+# Memory budget (single PRO 6000 96GB):
+#   - faiss-gpu FP16 e5_Flat (30GB)            : 30GB
+#   - vLLM rollout + KV cache (util=0.18)      : ~17GB
+#   - Policy FSDP-off (Qwen 3B)                : ~12GB
+#   - Ref model                                :  ~6GB
+#   - Activations + overhead                   :  ~5GB
+#   ----------------------------------------------------
+#   - Total                                    : ~70GB / 96GB
+#   - Headroom                                 : ~26GB ✅
+#
+# CPU mem budget (assume cgroup ~110-220GB):
+#   - retrieval mmap                           :  ~3GB
+#   - SkyRL trainer entry + ray actors         : ~50GB peak
+#   - reserve                                  : ~50GB
+#
+# Pre-requisites (run before this script):
+#   1. SkyRL env at /root/autodl-tmp/external/SkyRL with .venv/ activated
+#   2. retrieval_server.py modified for GpuIndexFlatConfig FP16 single-card path
+#      (see patches/retrieval_fp16_single_card.py)
+#   3. e5_Flat.index symlinked at /root/autodl-tmp/data/wikipedia_index/
+#   4. NQ data converted to SkyRL parquet format at /root/autodl-tmp/data/searchR1/
+#   5. retrieval_server already running on :8000 with --faiss_gpu --useFloat16Storage
+
+set -ex
+ulimit -n 65535
+
+DATA_DIR="/root/autodl-tmp/data/searchR1"
+RUN_NAME="phase6-skyrl-gspo-vanilla-clip-pro6k-1gpu-52"
+MODEL_PATH="/root/autodl-tmp/models/Qwen2.5-3B-Instruct"
+PROJECT="agentic-rl-search"
+
+cd /root/autodl-tmp/external/SkyRL
+
+source /etc/network_turbo 2>/dev/null
+export no_proxy="${no_proxy},hf-mirror.com,pypi.tuna.tsinghua.edu.cn,127.0.0.1,localhost"
+export NO_PROXY="$no_proxy"
+export HF_ENDPOINT=https://hf-mirror.com
+export HF_HOME=/root/autodl-tmp/.cache/huggingface
+export PATH=/root/.local/bin:$PATH
+
+source .venv/bin/activate
+
+# Memory budget controls (proven from smoke v23)
+export _SKYRL_USE_NEW_INFERENCE=0
+export RAY_memory_monitor_refresh_ms=0       # let kernel cgroup decide
+export RAY_memory_usage_threshold=0.99
+export RAY_object_store_memory=5000000000    # 5 GB plasma cap
+
+# Verify retrieval up (full Flat FP16 single-card)
+curl -sf -m 5 -X POST http://127.0.0.1:8000/retrieve \
+    -H 'Content-Type: application/json' \
+    -d '{"queries":["smoke"],"topk":1,"return_scores":true}' > /dev/null \
+    || { echo "❌ retrieval_server :8000 not ready"; exit 1; }
+echo "[phase6-skyrl] ✅ retrieval up"
+
+# Verify it's loading e5_Flat (not IVF_PQ)
+RETRIEVAL_INDEX=$(ps -fp $(cat /tmp/retrieval.pid 2>/dev/null) 2>/dev/null | grep -oE 'e5_[A-Za-z]+\.index' | head -1)
+if [[ "$RETRIEVAL_INDEX" != "e5_Flat.index" ]]; then
+    echo "❌ retrieval is using $RETRIEVAL_INDEX, not e5_Flat.index"
+    exit 1
+fi
+echo "[phase6-skyrl] ✅ retrieval using e5_Flat (full index)"
+
+# Per-process RAM trace (every 30s during training)
+TRACE=/tmp/phase6_skyrl_ram_trace.log
+echo "ts,total_GB,top1_pid,top1_GB,top1_cmd,top2_pid,top2_GB,top2_cmd,top3_pid,top3_GB,top3_cmd" > "$TRACE"
+(
+    while true; do
+        TOTAL=$(awk '{s+=$2} END {printf "%.1f", s/1024/1024}' <(ps -eo pid,rss --no-headers))
+        TOP=$(ps -eo pid,rss,comm --sort=-rss --no-headers | head -3 | awk '{printf "%s,%.1f,%s,", $1, $2/1024/1024, $3}')
+        echo "$(date +%H:%M:%S),$TOTAL,$TOP" >> "$TRACE"
+        sleep 30
+    done
+) &
+TRACER_PID=$!
+trap "kill $TRACER_PID 2>/dev/null" EXIT
+
+# Phase 6 hyperparams (matched to 4090 verl baseline as much as possible):
+#   - clip_ratio = 0.2 / 0.2 (vanilla clip = E ablation)
+#   - GSPO loss aggregation (policy_loss_type=gspo) — sequence-level
+#   - n_samples_per_prompt = 5 (= 4090 baseline)
+#   - max_turns = 2 (= 4090 baseline)
+#   - lr = 1e-6, kl_coef = 0.001, kl_type = low_var_kl
+#   - 52 training steps, eval @ step 0/10/20/30/40/50
+
+python -m skyrl.train.entrypoints.main_base \
+    data.train_data="['${DATA_DIR}/train.parquet']" \
+    data.val_data="['${DATA_DIR}/validation.parquet']" \
+    \
+    `# ===== Algorithm: GSPO native + vanilla clip (Phase 6 = E) =====` \
+    trainer.algorithm.advantage_estimator="grpo" \
+    trainer.algorithm.policy_loss_type="gspo" \
+    trainer.algorithm.eps_clip_low=0.2 \
+    trainer.algorithm.eps_clip_high=0.2 \
+    trainer.algorithm.use_kl_loss=true \
+    trainer.algorithm.kl_loss_coef=0.001 \
+    trainer.algorithm.kl_estimator_type="k3" \
+    \
+    `# ===== Optim =====` \
+    trainer.policy.optimizer_config.lr=1.0e-6 \
+    trainer.policy.optimizer_config.max_grad_norm=1.0 \
+    trainer.policy.optimizer_config.num_warmup_steps=15 \
+    \
+    `# ===== Model =====` \
+    trainer.policy.model.path="$MODEL_PATH" \
+    trainer.placement.colocate_all=true \
+    trainer.strategy=fsdp2 \
+    trainer.policy.fsdp_config.cpu_offload=false \
+    trainer.ref.fsdp_config.cpu_offload=false \
+    trainer.placement.policy_num_gpus_per_node=1 \
+    trainer.placement.ref_num_gpus_per_node=1 \
+    trainer.use_sample_packing=false \
+    trainer.flash_attn=false \
+    \
+    `# ===== Inference (vLLM single card, util tight) =====` \
+    generator.inference_engine.num_engines=1 \
+    generator.inference_engine.tensor_parallel_size=1 \
+    generator.inference_engine.backend=vllm \
+    generator.inference_engine.run_engines_locally=true \
+    generator.inference_engine.weight_sync_backend=nccl \
+    generator.inference_engine.gpu_memory_utilization=0.18 \
+    generator.inference_engine.async_engine=true \
+    \
+    `# ===== Batches (matched to 4090 baseline 4-GPU equivalent) =====` \
+    trainer.epochs=15 \
+    trainer.update_epochs_per_batch=1 \
+    trainer.train_batch_size=512 \
+    trainer.policy_mini_batch_size=64 \
+    trainer.micro_forward_batch_size_per_gpu=8 \
+    trainer.micro_train_batch_size_per_gpu=8 \
+    trainer.max_prompt_length=4096 \
+    \
+    `# ===== Generation =====` \
+    generator.max_input_length=4096 \
+    generator.sampling_params.max_generate_length=500 \
+    generator.batched=false \
+    generator.use_conversation_multi_turn=false \
+    generator.n_samples_per_prompt=5 \
+    generator.max_turns=2 \
+    generator.sampling_params.temperature=1.0 \
+    generator.sampling_params.top_p=1.0 \
+    generator.sampling_params.stop='["</search>", "</answer>"]' \
+    \
+    `# ===== Search environment =====` \
+    environment.env_class="search" \
+    environment.skyrl_gym.max_env_workers=16 \
+    environment.skyrl_gym.search.log_requests=false \
+    environment.skyrl_gym.search.search_url="https://u983007-00c5-85c9f714.westd.seetacloud.com:8443/retrieve" \
+    environment.skyrl_gym.search.topk=3 \
+    \
+    `# ===== Logging + ckpt =====` \
+    trainer.logger="wandb" \
+    trainer.project_name="$PROJECT" \
+    trainer.run_name="${RUN_NAME}" \
+    trainer.ckpt_interval=50 \
+    trainer.hf_save_interval=999 \
+    trainer.max_ckpts_to_keep=2 \
+    trainer.resume_mode=latest \
+    trainer.ckpt_path="/root/autodl-tmp/runs/${RUN_NAME}" \
+    \
+    `# ===== Eval =====` \
+    trainer.eval_batch_size=256 \
+    trainer.eval_before_train=false \
+    trainer.eval_interval=10 \
+    generator.eval_sampling_params.temperature=0 \
+    generator.eval_sampling_params.stop='["</search>", "</answer>"]' \
+    generator.eval_sampling_params.max_generate_length=500 \
+    \
+    trainer.export_path="/root/autodl-tmp/runs/${RUN_NAME}/exports" \
+    \
+    "$@" 2>&1 | tee "/tmp/${RUN_NAME}.log"

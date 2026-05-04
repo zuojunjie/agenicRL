@@ -25,10 +25,10 @@ test -f $TARGET || { echo "❌ retrieval_server not found"; exit 1; }
 # 4 卡模式：faiss_gpu + shard，64GB fp16 → 8GB/卡。比 CPU 模式快 ~80x。
 # 1 卡模式回退到 CPU faiss（64GB 单卡装不下）。
 GPU_COUNT=$(nvidia-smi --query-gpu=count --format=csv,noheader 2>/dev/null | head -1 | xargs)
-if [ "${GPU_COUNT:-0}" -ge 4 ]; then
+if [ "${GPU_COUNT:-0}" -ge 2 ]; then
     GPU_FLAG="--faiss_gpu"
-    export CUDA_VISIBLE_DEVICES=0,1,2,3   # 让 faiss 看到 4 卡 shard
-    echo "[launch] using faiss-gpu sharded across 4 GPUs (16GB fp16 each, ~8GB used)"
+    export CUDA_VISIBLE_DEVICES=0,1   # 让 faiss 看到 4 卡 shard
+    echo "[launch] using faiss-gpu sharded across 2 GPUs (PRO 6000 dual, fp16) (16GB fp16 each, ~8GB used)"
 else
     GPU_FLAG=""
     echo "[launch] using faiss-cpu (1TB RAM mode for 64GB index, ~1m22s/query)"

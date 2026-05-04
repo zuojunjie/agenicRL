@@ -1,24 +1,26 @@
 #!/usr/bin/env bash
-# Phase 0 baseline 训练脚本
-# 改自 external/Search-R1/train_grpo.sh
-# 适配：4×A100-80G + Qwen2.5-3B-Instruct + 本地预下载的模型/数据
+# Phase 2 — DAPO clip-higher (warm-start from Phase 1 final ckpt)
 #
-# 用法（在 GPU 模式下，retrieval_server 已起动后）：
-#   bash scripts/phase0_train_grpo.sh
+# 改动 vs phase0_train_grpo.sh:
+#   1. 入口仍是 main_ppo_format（继承 Phase 1 的 4 标签 DFA reward — 单变量只换 clip）
+#   2. BASE_MODEL = Phase 1 final ckpt（如果存在）；否则 cold-start
+#   3. 新增 +actor_rollout_ref.actor.clip_ratio_high=0.28 (DAPO baseline 0.28, vanilla 0.20)
+#   4. EXPERIMENT_NAME 默认 phase2-dapo-cliphigh-50
 #
-# 改动 vs 原版：
-#   1. CUDA_VISIBLE_DEVICES: 8 GPU → 4 GPU
-#   2. trainer.n_gpus_per_node: 8 → 4
-#   3. BASE_MODEL: HF repo id → 本地预下载路径
-#   4. 修上游 bug: $TRAIN_DATA_DIR/$TEST_DATA_DIR 都没定义，原脚本会崩；改成 $DATA_DIR
-#   5. data.train_batch_size: 先保持 512，OOM 再降到 256
-#   6. 加一个 mkdir -p verl_checkpoints
+# 前置条件：
+#   1. patch 已 apply 到 Search-R1：
+#      cd /root/autodl-tmp/external/Search-R1
+#      patch -p1 < /root/agenicRL/patches/phase2_dapo_clip_higher.patch
+#   2. 验证 patch 生效：
+#      grep -n cliprange_high verl/trainer/ppo/core_algos.py  # 应 4 处命中
+#   3. retrieval_server 在跑（端口 8000 health 200）
+#
+# 用法：
+#   bash scripts/phase2_train_dapo.sh
+#   PHASE1_CKPT=/root/autodl-tmp/runs/phase1-.../ckpts/global_step_50 bash scripts/phase2_train_dapo.sh
 
 set -e
 
-# ============================================================
-# 必备环境（每次新 SSH session 都要 source）
-# ============================================================
 source /etc/network_turbo 2>/dev/null || true
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate searchr1
@@ -26,63 +28,63 @@ conda activate searchr1
 # ============================================================
 # 配置
 # ============================================================
-# GPU 选择：默认 4 卡共享 retrieval，可以改 TRAIN_GPUS=0,1,2 把 retrieval 独占到 GPU 3
 export CUDA_VISIBLE_DEVICES=${TRAIN_GPUS:-0,1,2,3}
 N_GPUS=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 export DATA_DIR='/root/autodl-tmp/data/nq_search'
-export BASE_MODEL='/root/autodl-tmp/models/Qwen2.5-3B-Instruct'
-export EXPERIMENT_NAME=${EXPERIMENT_NAME:-phase0-nq-grpo-qwen2.5-3b-it-em}
+
+# Phase 2 起点：默认 cold-start（与 Phase 0e single-variable 三方对比，都从 Qwen 开始）
+# 显式 `export PHASE1_CKPT=/path` 才会 warm-start
+if [ -n "${PHASE1_CKPT:-}" ] && [ -d "$PHASE1_CKPT" ] && [ "$(ls -A $PHASE1_CKPT 2>/dev/null)" ]; then
+    export BASE_MODEL="$PHASE1_CKPT"
+    echo "[phase2-dapo] warm-start (opt-in) from $BASE_MODEL"
+else
+    export BASE_MODEL='/root/autodl-tmp/models/Qwen2.5-3B-Instruct'
+    echo "[phase2-dapo] cold-start (default) from $BASE_MODEL"
+fi
+
+export EXPERIMENT_NAME=${EXPERIMENT_NAME:-phase2-dapo-cliphigh-50}
 export WAND_PROJECT='agentic-rl-search'
 
-# 4090 无 NVLink — 强制 NCCL 走 socket 而不是 P2P
+# DAPO 核心超参
+CLIP_RATIO_LOW=${CLIP_RATIO_LOW:-0.2}
+CLIP_RATIO_HIGH=${CLIP_RATIO_HIGH:-0.28}    # ← Phase 2 唯一变量
+
 export NCCL_P2P_DISABLE=1
 export NCCL_IB_DISABLE=1
-
-# 减少 GPU 显存碎片（OOM 错误推荐的设置）
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-
-# vllm 与 qwen2 的 flash_attn 兼容性问题，强制 XFORMERS
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
-# 允许命令行覆盖 max_steps 用作 smoke test
-MAX_STEPS=${MAX_STEPS:-52}     # 2026-04-28 改：50 步循环退出在 step 49，step 50 没 ckpt+val。用 52 让 step 50 完整存在。
-# ⚠️ SAVE_FREQ 默认 10（不再 100）——Phase 0d 教训：OOM 时损失太多 step
-# 详见 memory/ckpt_save_lessons.md
-SAVE_FREQ=${SAVE_FREQ:-10}     # 2026-04-27 Phase 0e 后调整：5 太碎 → 10（每 ~1h ckpt 1 次，损失上界 10 步 ≈ ¥10）
+MAX_STEPS=${MAX_STEPS:-52}    # 让 step 50 ckpt + val 完整存在
+SAVE_FREQ=${SAVE_FREQ:-10}    # 2026-04-27 Phase 0e 后调整：5 太碎，10 足够（损失上界 10 步 ≈ ¥10）
 TEST_FREQ=${TEST_FREQ:-10}
+LOGGER=${LOGGER:-wandb}
 
-# Logger: console (默认，无 wandb 依赖) 或 wandb (需 WANDB_API_KEY env var)
-LOGGER=${LOGGER:-console}
-
-# FSDP offload 模式：
-#   full     - param + grad + optim 全 offload 到 CPU（默认，4 卡共享 retrieval 时用）
-#   minimal  - 只 optim offload（params/grads 在 GPU，actor update 提速 30-50%，需 dedicated retrieval 留出显存）
-#   none     - 全在 GPU（最快但显存吃紧）
 FSDP_MODE=${FSDP_MODE:-full}
 case "$FSDP_MODE" in
     full)    PARAM_OFF=true;  GRAD_OFF=true;  OPTIM_OFF=true ;;
     minimal) PARAM_OFF=false; GRAD_OFF=false; OPTIM_OFF=true ;;
     none)    PARAM_OFF=false; GRAD_OFF=false; OPTIM_OFF=false ;;
-    *) echo "❌ unknown FSDP_MODE=$FSDP_MODE"; exit 1 ;;
 esac
-echo "[config] CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES (n_gpus=$N_GPUS), FSDP_MODE=$FSDP_MODE"
 
-# ============================================================
-# 启动前检查
-# ============================================================
-test -d "$BASE_MODEL"             || { echo "❌ 模型不在 $BASE_MODEL"; exit 1; }
+echo "[phase2] CUDA=$CUDA_VISIBLE_DEVICES (n_gpus=$N_GPUS), clip=[$CLIP_RATIO_LOW, $CLIP_RATIO_HIGH], FSDP=$FSDP_MODE"
+
+test -d "$BASE_MODEL"             || { echo "❌ BASE_MODEL 不在 $BASE_MODEL"; exit 1; }
 test -f "$DATA_DIR/train.parquet" || { echo "❌ NQ train.parquet 不在 $DATA_DIR"; exit 1; }
-test -f "$DATA_DIR/test.parquet"  || { echo "❌ NQ test.parquet 不在 $DATA_DIR"; exit 1; }
-nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -4
+
+# Patch 校验：clip_ratio_high 关键字必须在 verl 源码里
+VERL_ROOT="/root/autodl-tmp/external/Search-R1"
+if ! grep -q "clip_ratio_high\|cliprange_high" "$VERL_ROOT/verl/trainer/ppo/core_algos.py"; then
+    echo "❌ DAPO patch 未应用！先跑：cd $VERL_ROOT && patch -p1 < /root/agenicRL/patches/phase2_dapo_clip_higher.patch"
+    exit 1
+fi
+echo "[phase2] ✅ DAPO patch 已生效"
+
 mkdir -p verl_checkpoints
 
-# 5 分钟烟雾测试可以单独跑（max_steps 改成 5）
-# 这里是真训练版
-
 # ============================================================
-# 训练（参数大体对齐 Search-R1 论文 v0.2 配方）
+# 训练
 # ============================================================
-PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
+PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo_format \
     data.train_files=$DATA_DIR/train.parquet \
     data.val_files=$DATA_DIR/test.parquet \
     data.train_data_num=null \
@@ -102,14 +104,16 @@ PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.optim.lr_warmup_steps_ratio=0.285 \
     actor_rollout_ref.actor.use_kl_loss=true \
     actor_rollout_ref.actor.ppo_mini_batch_size=256 \
-    actor_rollout_ref.actor.ppo_micro_batch_size=64 \
+    actor_rollout_ref.actor.ppo_micro_batch_size=32 \
+    actor_rollout_ref.actor.clip_ratio=$CLIP_RATIO_LOW \
+    +actor_rollout_ref.actor.clip_ratio_high=$CLIP_RATIO_HIGH \
     actor_rollout_ref.actor.fsdp_config.param_offload=$PARAM_OFF \
     actor_rollout_ref.actor.fsdp_config.grad_offload=$GRAD_OFF \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=$OPTIM_OFF \
     actor_rollout_ref.rollout.log_prob_micro_batch_size=128 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.3 \
     actor_rollout_ref.ref.log_prob_micro_batch_size=128 \
     actor_rollout_ref.ref.fsdp_config.param_offload=$PARAM_OFF \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
