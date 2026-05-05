@@ -27,6 +27,24 @@ wikipedia_index/
 *.log
 wandb/
 runs/
+ckpts/
+ckpts_*/
+nohup.out
+
+# Caches
+.cache/
+.skyrl-venv/
+venvs/
+
+# Backup files
+*.bak
+*.bak_*
+
+# Large data
+*.parquet
+*.tar
+*.tar.gz
+*.zip
 
 # OS
 .DS_Store
