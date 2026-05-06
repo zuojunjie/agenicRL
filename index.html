@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agenicRL — 15 个 phase 端到端学 Agentic RL · 3B 0.4490 → 7B 0.4701 SOTA</title>
+<meta name="description" content="从 Qwen2.5-3B 到 7B 的 Agentic RL 学习历程：GRPO → DAPO → GSPO → ToRL → GiGPO → ARPO → Tool Use 复现链。每个 phase 一次 single-variable 实验，记录失败 + 工程教训。">
+<meta property="og:title" content="agenicRL — Agentic RL 学习历程 · 7B SOTA val/nq 0.4701">
+<meta property="og:description" content="15 个 phase / 5 大 takeaway / 累积 +140% from base / 总投入 ~¥1250">
+<meta property="og:type" content="website">
+
+<style>
+  :root {
+    --primary: #1a73e8;
+    --primary-dark: #0d47a1;
+    --accent: #7c3aed;
+    --pink: #ec4899;
+    --orange: #f97316;
+    --success: #10b981;
+    --gold: #fbbf24;
+    --bg: #0a0e27;
+    --bg-soft: #111633;
+    --bg-card: rgba(255,255,255,0.04);
+    --border: rgba(255,255,255,0.1);
+    --text: #e5e7eb;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    background-image:
+      radial-gradient(at 20% 10%, rgba(124,58,237,0.15) 0, transparent 50%),
+      radial-gradient(at 80% 80%, rgba(26,115,232,0.15) 0, transparent 50%),
+      radial-gradient(at 40% 60%, rgba(236,72,153,0.08) 0, transparent 50%);
+    color: var(--text);
+    line-height: 1.7;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+  /* Nav */
+  .nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(10, 14, 39, 0.8);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 0;
+  }
+  .nav-inner {
+    max-width: 1200px; margin: 0 auto; padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-logo {
+    font-weight: 700; font-size: 18px;
+    background: linear-gradient(135deg, var(--primary), var(--pink));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .nav-links { display: flex; gap: 24px; align-items: center; }
+  .nav-links a {
+    color: var(--text-muted); text-decoration: none; font-size: 14px;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta {
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: white !important; padding: 8px 16px; border-radius: 8px;
+    font-weight: 500;
+  }
+
+  /* Hero */
+  .hero { padding: 100px 0 80px; text-align: center; }
+  .hero-badge {
+    display: inline-block; padding: 6px 16px;
+    background: rgba(124,58,237,0.15); color: #c4b5fd;
+    border: 1px solid rgba(124,58,237,0.3);
+    border-radius: 999px; font-size: 13px; font-weight: 500;
+    margin-bottom: 24px;
+  }
+  .hero h1 {
+    font-size: clamp(40px, 6vw, 72px);
+    font-weight: 800; line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 20px;
+  }
+  .hero h1 .grad {
+    background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p {
+    font-size: 20px; color: var(--text-muted);
+    max-width: 720px; margin: 0 auto 40px;
+  }
+  .hero-cta { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 28px; border-radius: 10px;
+    font-weight: 600; font-size: 15px;
+    text-decoration: none; transition: all 0.2s;
+    border: 1px solid transparent;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--primary), var(--accent));
+    color: white;
+    box-shadow: 0 4px 20px rgba(124,58,237,0.3);
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(124,58,237,0.5); }
+  .btn-secondary {
+    background: var(--bg-card); color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
+
+  /* Stats */
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px; margin-top: 60px;
+  }
+  .stat {
+    padding: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    text-align: left;
+    transition: all 0.2s;
+  }
+  .stat:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.2); }
+  .stat-num {
+    font-size: 40px; font-weight: 800; line-height: 1;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .stat-num.gold { background: linear-gradient(135deg, #fbbf24, #f97316); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stat-num.green { background: linear-gradient(135deg, #34d399, #10b981); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stat-label { color: var(--text-muted); font-size: 14px; margin-top: 8px; }
+
+  /* Section base */
+  section.show { padding: 80px 0; }
+  .section-header { text-align: center; margin-bottom: 60px; }
+  .section-header .eyebrow {
+    display: inline-block; color: #a78bfa;
+    font-weight: 600; font-size: 13px; letter-spacing: 0.1em;
+    text-transform: uppercase; margin-bottom: 12px;
+  }
+  .section-header h2 {
+    font-size: clamp(32px, 4vw, 48px); font-weight: 800;
+    letter-spacing: -0.01em; line-height: 1.2;
+  }
+  .section-header p {
+    color: var(--text-muted); font-size: 18px;
+    max-width: 640px; margin: 16px auto 0;
+  }
+
+  /* Features grid */
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+  .feature-card {
+    padding: 28px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    transition: all 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .feature-card::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    background: var(--accent-color, var(--primary));
+  }
+  .feature-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.2); }
+  .feature-icon { font-size: 32px; margin-bottom: 12px; }
+  .feature-card h3 { font-size: 18px; margin-bottom: 8px; }
+  .feature-card p { color: var(--text-muted); font-size: 14px; line-height: 1.6; }
+  .feature-card .week {
+    display: inline-block; padding: 2px 8px;
+    background: rgba(124,58,237,0.15); color: #c4b5fd;
+    border-radius: 4px; font-size: 11px; margin-top: 12px;
+    font-weight: 500;
+  }
+
+  /* Phase timeline */
+  .phases { display: flex; flex-direction: column; gap: 16px; }
+  .phase {
+    display: grid; grid-template-columns: 100px 1fr auto;
+    gap: 24px; align-items: center;
+    padding: 20px 28px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: all 0.2s;
+  }
+  .phase:hover { border-color: rgba(255,255,255,0.2); transform: translateX(2px); }
+  .phase-num {
+    font-size: 13px; font-weight: 700;
+    padding: 6px 12px; border-radius: 6px;
+    text-align: center; letter-spacing: 0.05em;
+  }
+  .phase[data-state="base"]    .phase-num { background: rgba(99,102,241,0.2);  color: #a5b4fc; }
+  .phase[data-state="win"]     .phase-num { background: rgba(16,185,129,0.2);  color: #6ee7b7; }
+  .phase[data-state="lose"]    .phase-num { background: rgba(239,68,68,0.2);   color: #fca5a5; }
+  .phase[data-state="sota"]    .phase-num { background: linear-gradient(135deg, #fbbf24, #f97316); color: #1a1a1a; }
+  .phase[data-state="mid"]     .phase-num { background: rgba(245,158,11,0.2);  color: #fcd34d; }
+  .phase[data-state="planned"] .phase-num { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+  .phase-content h4 {
+    font-size: 16px; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .phase-content h4 .delta { font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .phase-content h4 .delta.up   { background: rgba(16,185,129,0.15);  color: #6ee7b7; }
+  .phase-content h4 .delta.down { background: rgba(239,68,68,0.15);   color: #fca5a5; }
+  .phase-content h4 .delta.gold { background: linear-gradient(135deg, rgba(251,191,36,0.2), rgba(249,115,22,0.2)); color: #fcd34d; }
+  .phase-content p { font-size: 13px; color: var(--text-muted); margin: 0; }
+  .phase-val {
+    font-size: 13px; color: var(--text-muted);
+    font-family: "SF Mono", Monaco, monospace;
+    text-align: right; min-width: 80px;
+  }
+  .phase-val .num { font-size: 18px; font-weight: 700; color: var(--text); display: block; }
+  .phase-val .num.sota { color: #fcd34d; }
+
+  /* Comparison */
+  .comparison-wrap {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .comparison { width: 100%; border-collapse: collapse; }
+  .comparison th {
+    padding: 14px 20px; text-align: left;
+    background: rgba(255,255,255,0.03);
+    font-weight: 600; font-size: 13px;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+  }
+  .comparison td {
+    padding: 14px 20px; border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 14px;
+  }
+  .comparison tr:last-child td { border-bottom: none; }
+  .comparison tr:hover td { background: rgba(255,255,255,0.02); }
+  .check {
+    display: inline-block; width: 24px; height: 24px;
+    border-radius: 50%;
+    text-align: center; line-height: 24px;
+    font-weight: 700; font-size: 14px;
+  }
+  .check.yes { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+  .check.no  { background: rgba(239,68,68,0.15); color: #fca5a5; }
+  .check.mid { background: rgba(245,158,11,0.2); color: #fcd34d; }
+
+  /* Progress chart */
+  .chart-wrap {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+  }
+
+  /* Tech stack */
+  .tech-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+  .tech {
+    padding: 10px 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+  .tech:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
+
+  /* CTA */
+  .cta-section { padding: 100px 0; text-align: center; }
+  .cta-card {
+    background: linear-gradient(135deg,
+      rgba(26,115,232,0.1), rgba(124,58,237,0.1), rgba(236,72,153,0.1));
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 24px;
+    padding: 60px 40px;
+    max-width: 800px; margin: 0 auto;
+    position: relative; overflow: hidden;
+  }
+  .cta-card::before {
+    content: ""; position: absolute; inset: -50%;
+    background: conic-gradient(from 180deg at 50% 50%,
+      rgba(26,115,232,0.1) 0deg,
+      rgba(124,58,237,0.1) 120deg,
+      rgba(236,72,153,0.1) 240deg,
+      rgba(26,115,232,0.1) 360deg);
+    animation: spin 20s linear infinite;
+    z-index: -1;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cta-card h2 { font-size: 36px; font-weight: 800; margin-bottom: 16px; }
+  .cta-card p { color: var(--text-muted); margin-bottom: 32px; font-size: 17px; }
+  .cta-card .hero-cta { justify-content: center; }
+
+  /* Footer */
+  .footer {
+    padding: 40px 0;
+    border-top: 1px solid var(--border);
+    text-align: center; color: var(--text-dim);
+    font-size: 14px;
+  }
+  .footer a { color: var(--text-muted); text-decoration: none; }
+  .footer a:hover { color: var(--text); }
+
+  @media (max-width: 640px) {
+    .hero { padding: 60px 0 40px; }
+    .nav-links a:not(.nav-cta) { display: none; }
+    .phase { grid-template-columns: 1fr; gap: 12px; padding: 16px 20px; }
+    .phase-val { text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="nav-logo">🧠 agenicRL</div>
+    <div class="nav-links">
+      <a href="#takeaways">核心 Takeaway</a>
+      <a href="#phases">Phase 进程</a>
+      <a href="#comparison">路线对比</a>
+      <a href="https://my.feishu.cn/wiki/Rjmqwq3jNiIXG8kp9gtcOghQnpb" target="_blank">📚 飞书 Wiki</a>
+      <a href="https://github.com/zuojunjie/agenicRL" class="nav-cta">⭐ GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="container">
+    <span class="hero-badge">🎓 Agentic RL · 15 个 phase 实验 · 2026-04 → ongoing</span>
+    <h1>
+      端到端学习<br>
+      <span class="grad">Agentic RL 主流算法栈</span>
+    </h1>
+    <p>
+      把每一篇论文 <strong>变成一次具体的代码改动 + A/B 实验</strong>。
+      从 Qwen2.5-3B 0.196 → 7B <strong style="color:#fcd34d">0.4701</strong>，累计提升 <strong style="color:#6ee7b7">+140%</strong>，
+      不追 SOTA，追 RL 工程直觉。
+    </p>
+    <div class="hero-cta">
+      <a href="https://github.com/zuojunjie/agenicRL" class="btn btn-primary">⭐ GitHub 仓库</a>
+      <a href="https://my.feishu.cn/wiki/Rjmqwq3jNiIXG8kp9gtcOghQnpb" class="btn btn-secondary" target="_blank">📚 飞书知识库</a>
+      <a href="#phases" class="btn btn-secondary">🗺️ 看 Phase 进程</a>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-num gold">0.4701</div>
+        <div class="stat-label">7B SOTA · val/nq · Phase 9</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num green">+140%</div>
+        <div class="stat-label">累计提升 vs base 模型</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">15</div>
+        <div class="stat-label">Phase / sub-experiments</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">¥1250</div>
+        <div class="stat-label">总投入 / ~100 GPU-hours</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Takeaways -->
+<section class="show" id="takeaways">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">Engineering Takeaways</div>
+      <h2>15 个 phase 沉淀的 5 个工程直觉</h2>
+      <p>不是论文综述，是实证。每条 takeaway 后面都对应至少 2 个失败 + 1 个成功 phase。</p>
+    </div>
+
+    <div class="features">
+      <div class="feature-card" style="--accent-color:#60a5fa">
+        <div class="feature-icon">🎯</div>
+        <h3>Reward 函数 &gt;&gt; PPO 算法</h3>
+        <p>DFA 5 档 reward (Phase 0e) 比 EM 二元 (0d) <strong>+11%</strong>；后续所有 PPO 内部改动最多 +5%（GSPO）。<br>先把 reward 设计对，再调算法。</p>
+        <span class="week">证据：0d → 0e</span>
+      </div>
+
+      <div class="feature-card" style="--accent-color:#a78bfa">
+        <div class="feature-icon">🌡️</div>
+        <h3>Entropy 是 RL 训练命脉</h3>
+        <p>DAPO / GiGPO / 5a / 5b <strong>全部死于 entropy 失控</strong>（4.92 / 3.4+ / 6.6）。<br>GSPO sequence-level ratio 自然控制 entropy 探底到 0.46。</p>
+        <span class="week">证据：2A / 4 / 5a / 5b</span>
+      </div>
+
+      <div class="feature-card" style="--accent-color:#f472b6">
+        <div class="feature-icon">⚠️</div>
+        <h3>Reward shaping = hacking 陷阱</h3>
+        <p>ToRL 的 per-turn shaping 让模型学会<strong>刷 bonus 而不是答对题</strong>。response 长 3×、n_search 翻倍，但 raw EM 反降。<br>Single-objective reward 比 multi-component shaping 安全。</p>
+        <span class="week">证据：Phase 3</span>
+      </div>
+
+      <div class="feature-card" style="--accent-color:#fb923c">
+        <div class="feature-icon">🔧</div>
+        <h3>硬件迁移要 single-variable 校准</h3>
+        <p>Phase 7.5 同时改 9 个变量直接挂掉。二分定位<strong>唯一致命变量是 policy_mini_batch_size</strong>（4090=64 → 7.5=256），其他 8 个安全。<br>换硬件先 baseline 等价性，再上新算法。</p>
+        <span class="week">证据：Phase 7 系列</span>
+      </div>
+
+      <div class="feature-card" style="--accent-color:#34d399">
+        <div class="feature-icon">📈</div>
+        <h3>Capacity scale 是稳定杠杆</h3>
+        <p>算法定型后 3B → 7B <strong>+2.1%</strong>，比 paper GSPO +1.1% 杠杆更大。7B 仅 20 步就达到 3B 50 步 SOTA。<br>算法没思路就 scale 模型。</p>
+        <span class="week">证据：Phase 9</span>
+      </div>
+
+      <div class="feature-card" style="--accent-color:#fbbf24">
+        <div class="feature-icon">🎓</div>
+        <h3>失败案例 = 一等公民</h3>
+        <p>5 个失败 phase 沉淀的失败模式归类（entropy 失控类型 / shaping 陷阱 / 任务-算法不匹配）<strong>价值不亚于 SOTA</strong>。<br>每个失败都被 wiki 记录、归类、对照。</p>
+        <span class="week">证据：DAPO/ToRL/GiGPO/ARPO/format reward</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Progress chart -->
+<section class="show" id="progress">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">Cumulative Progress</div>
+      <h2>5 个里程碑，5 次跳跃</h2>
+      <p>每一跳 = 一项变量改动。点亮节点 = 当时的 SOTA。</p>
+    </div>
+
+    <div class="chart-wrap">
+      <svg viewBox="0 0 1000 360" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;max-height:380px">
+        <defs>
+          <linearGradient id="lineGrad" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stop-color="#60a5fa"/>
+            <stop offset="50%" stop-color="#a78bfa"/>
+            <stop offset="100%" stop-color="#fbbf24"/>
+          </linearGradient>
+          <linearGradient id="areaGrad" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="#a78bfa" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <g stroke="rgba(255,255,255,0.08)" stroke-dasharray="4 4">
+          <line x1="60" y1="40" x2="940" y2="40"/>
+          <line x1="60" y1="120" x2="940" y2="120"/>
+          <line x1="60" y1="200" x2="940" y2="200"/>
+          <line x1="60" y1="280" x2="940" y2="280"/>
+        </g>
+        <g fill="#94a3b8" font-size="11" text-anchor="end">
+          <text x="50" y="44">0.50</text>
+          <text x="50" y="124">0.40</text>
+          <text x="50" y="204">0.30</text>
+          <text x="50" y="284">0.20</text>
+        </g>
+        <path d="M 80,304 L 230,160 L 380,120 L 530,103 L 680,94 L 830,76 L 830,320 L 80,320 Z" fill="url(#areaGrad)"/>
+        <path d="M 80,304 L 230,160 L 380,120 L 530,103 L 680,94 L 830,76" stroke="url(#lineGrad)" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <g font-family="-apple-system, sans-serif">
+          <circle cx="80" cy="304" r="6" fill="#94a3b8"/>
+          <text x="80" y="332" fill="#94a3b8" font-size="12" text-anchor="middle">base</text>
+          <text x="80" y="294" fill="#94a3b8" font-size="11" text-anchor="middle">0.196</text>
+          <circle cx="230" cy="160" r="6" fill="#a78bfa"/>
+          <text x="230" y="332" fill="#e5e7eb" font-size="12" text-anchor="middle">Phase 0d</text>
+          <text x="230" y="148" fill="#a78bfa" font-size="11" text-anchor="middle">0.376</text>
+          <circle cx="380" cy="120" r="7" fill="#a78bfa"/>
+          <circle cx="380" cy="120" r="11" fill="none" stroke="#a78bfa" stroke-width="1.5" opacity="0.5"/>
+          <text x="380" y="332" fill="#e5e7eb" font-size="12" text-anchor="middle" font-weight="600">0e ⭐</text>
+          <text x="380" y="108" fill="#a78bfa" font-size="11" text-anchor="middle">0.417</text>
+          <circle cx="530" cy="103" r="6" fill="#60a5fa"/>
+          <text x="530" y="332" fill="#e5e7eb" font-size="12" text-anchor="middle">2B GSPO</text>
+          <text x="530" y="91" fill="#60a5fa" font-size="11" text-anchor="middle">0.4378</text>
+          <circle cx="680" cy="94" r="7" fill="#60a5fa"/>
+          <circle cx="680" cy="94" r="11" fill="none" stroke="#60a5fa" stroke-width="1.5" opacity="0.5"/>
+          <text x="680" y="332" fill="#e5e7eb" font-size="12" text-anchor="middle" font-weight="600">7.8d ⭐⭐</text>
+          <text x="680" y="82" fill="#60a5fa" font-size="11" text-anchor="middle">0.4490</text>
+          <circle cx="830" cy="76" r="9" fill="#fbbf24"/>
+          <circle cx="830" cy="76" r="14" fill="none" stroke="#fbbf24" stroke-width="2" opacity="0.6"/>
+          <text x="830" y="332" fill="#fcd34d" font-size="13" text-anchor="middle" font-weight="700">Phase 9 ⭐⭐⭐</text>
+          <text x="830" y="62" fill="#fcd34d" font-size="13" text-anchor="middle" font-weight="700">0.4701</text>
+        </g>
+        <g fill="#94a3b8" font-size="10" font-style="italic" text-anchor="middle">
+          <text x="155" y="240">+0.180 GRPO 算法</text>
+          <text x="305" y="148">+0.041 DFA reward</text>
+          <text x="455" y="120">+0.021 GSPO seq</text>
+          <text x="605" y="106">+0.011 paper GSPO</text>
+          <text x="755" y="92">+0.021 3B → 7B</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- Phases -->
+<section class="show" id="phases">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">Phase by Phase</div>
+      <h2>15 个 phase 完整账本</h2>
+      <p>每个 phase 一行：算法改动 / 实测结果 / 学到了什么。每行都点亮 wiki 链接（详细数据 + val 曲线）。</p>
+    </div>
+
+    <div class="phases">
+      <div class="phase" data-state="base">
+        <div class="phase-num">PHASE 0d</div>
+        <div class="phase-content">
+          <h4>GRPO + EM 二元 reward <span class="delta down">-10%</span></h4>
+          <p>RL 起点，验证 GRPO 能学到东西（+0.180 over base）。Ckpt 失误 OOM 教训。</p>
+        </div>
+        <div class="phase-val"><span class="num">0.376</span>val/nq</div>
+      </div>
+
+      <div class="phase" data-state="win">
+        <div class="phase-num">PHASE 0e ⭐</div>
+        <div class="phase-content">
+          <h4>+ DFA 5 档 format reward <span class="delta up">+11% 主基线</span></h4>
+          <p>reward 函数设计是最大杠杆。一次 +11% 远超后续所有 PPO 内部改动。</p>
+        </div>
+        <div class="phase-val"><span class="num">0.417</span>val/nq</div>
+      </div>
+
+      <div class="phase" data-state="base">
+        <div class="phase-num">PHASE 1</div>
+        <div class="phase-content">
+          <h4>读 R1 论文（0 步训练）</h4>
+          <p>纯学习 phase。把 DeepSeek-R1 论文吃透 → 为 Phase 2-5 算法改进打理论底子。</p>
+        </div>
+        <div class="phase-val"><span class="num">—</span>paper</div>
+      </div>
+
+      <div class="phase" data-state="lose">
+        <div class="phase-num">PHASE 2A</div>
+        <div class="phase-content">
+          <h4>DAPO clip-higher (token-level asymmetric) <span class="delta down">-4%</span></h4>
+          <p>entropy 从 0.96 一路爆到 4.92。token-level clip 放宽 → policy 步子大 → 模型变随机。</p>
+        </div>
+        <div class="phase-val"><span class="num">0.400</span>val/nq</div>
+      </div>
+
+      <div class="phase" data-state="win">
+        <div class="phase-num">PHASE 2B</div>
+        <div class="phase-content">
+          <h4>GSPO sequence-level ratio <span class="delta up">+5% 3B 第一个赢家</span></h4>
+          <p>整序列共享一个 ratio → entropy 自然探底到 0.46（vs DAPO 4.92）。pg_clipfrac 低 5×。</p>
+        </div>
+        <div class="phase-val"><span class="num">0.4378</span>val/nq</div>
+      </div>
+
+      <div class="phase" data-state="lose">
+        <div class="phase-num">PHASE 3</div>
+        <div class="phase-content">
+          <h4>ToRL multi-turn shaping reward <span class="delta down">-9% reward hacking</span></h4>
+          <p>per-turn shaping 让模型刷 bonus 而不是答对题。response 长 3×、n_search 翻倍，但 raw EM 反降。</p>
+        </div>
+        <div class="phase-val"><span class="num">0.380</span>val/nq</div>
+      </div>
+
+      <div class="phase" data-state="lose">
+        <div class="phase-num">PHASE 4</div>
+        <div class="phase-content">
+          <h4>GiGPO 双层 advantage <span class="delta down">-27% 最差</span></h4>
+          <p>困难 prompt 的 outer adv 是大负值 → policy 跑偏 → entropy 25 步就 1.84 → 用户 kill@40。</p>
+        </div>
+        <div class="phase-val"><span class="num">0.292</span>kill@40</div>
+      </div>
+
+      <div class="phase" data-state="lose">
+        <div class="phase-num">PHASE 5</div>
+        <div class="phase-content">
+          <h4>ARPO 5a + 5b 双子实验 <span class="delta down">-14% / -37%</span></h4>
+          <p>adapt entropy controller ✅（成功锁住 entropy）。但 traj credit / 局部 KL anchor 都 hurt。5b 整体崩盘。</p>
+        </div>
+        <div class="phase-val"><span class="num">0.357</span>5a / 5b 0.254</div>
+      </div>
+
+      <div class="phase" data-state="mid">
+        <div class="phase-num">PHASE 6</div>
+        <div class="phase-content">
+          <h4>4090 → PRO 6000 硬件迁移 <span class="delta gold">¥11.52/h → ¥5.98/h</span></h4>
+          <p>vllm 0.6 → 0.8 v1 async；FAISS-GPU 60GB Flat 单卡装下；retrieval_server bug 修复。</p>
+        </div>
+        <div class="phase-val"><span class="num">~0.42</span>等价</div>
+      </div>
+
+      <div class="phase" data-state="mid">
+        <div class="phase-num">PHASE 7 系列</div>
+        <div class="phase-content">
+          <h4>9 子实验定位元凶（二分 debug）</h4>
+          <p>迁移时 9 个参数同时改了。二分发现唯一致命变量是 policy_mini_batch（4090=64 → 7.5=256）。</p>
+        </div>
+        <div class="phase-val"><span class="num">9</span>子实验</div>
+      </div>
+
+      <div class="phase" data-state="sota">
+        <div class="phase-num">PHASE 7.8d ⭐⭐</div>
+        <div class="phase-content">
+          <h4>paper GSPO + 非对称 clip [0.2, 0.28] <span class="delta gold">+7.7% 3B SOTA</span></h4>
+          <p>policy_loss_type=gspo + loss_reduction=sequence_mean + asym clip。3B 路线收尾的最佳配置。</p>
+        </div>
+        <div class="phase-val"><span class="num sota">0.4490</span>val/nq</div>
+      </div>
+
+      <div class="phase" data-state="lose">
+        <div class="phase-num">PHASE 7.8e</div>
+        <div class="phase-content">
+          <h4>+ format reward 在 NQ 上 <span class="delta down">-2% vs 7.8d 证伪</span></h4>
+          <p>format compliance 95% → 99%，但切掉了 self-correction trace。format 适合 multi-turn agentic，不适合 single-turn RAG。</p>
+        </div>
+        <div class="phase-val"><span class="num">0.4296</span>val/nq</div>
+      </div>
+
+      <div class="phase" data-state="lose">
+        <div class="phase-num">PHASE 8</div>
+        <div class="phase-content">
+          <h4>max_turns=4 实验 <span class="delta down">0 收益证伪</span></h4>
+          <p>max_turns 是上限不是 hint。NQ 单跳本质决定 agent 实际仍只用 1.18 轮。多跳 / Tool 任务才有价值。</p>
+        </div>
+        <div class="phase-val"><span class="num">0.4475</span>val/nq</div>
+      </div>
+
+      <div class="phase" data-state="sota">
+        <div class="phase-num">PHASE 9 ⭐⭐⭐</div>
+        <div class="phase-content">
+          <h4>Qwen2.5-7B + dedicated retrieval (3 GPU) <span class="delta gold">+12.7% 7B SOTA</span></h4>
+          <p>3 卡分工：GPU 0/1 train+vllm，GPU 2 dedicated retrieval。Capacity scale 是稳定杠杆。20 步达 SOTA。</p>
+        </div>
+        <div class="phase-val"><span class="num sota">0.4701</span>val/nq</div>
+      </div>
+
+      <div class="phase" data-state="planned">
+        <div class="phase-num">PHASE 10+</div>
+        <div class="phase-content">
+          <h4>切到 MATH + Python sandbox（agentic 本色）</h4>
+          <p>Tool Use 路线启动。Phase 10-15 复现 ToRL → ARTIST → GiGPO 重试 → ARPO → ToolRL 5 篇论文链。</p>
+        </div>
+        <div class="phase-val"><span class="num">🟡</span>启动中</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Comparison: NQ vs Tool Use route -->
+<section class="show" id="comparison">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">Two Routes</div>
+      <h2>NQ 路线（已收敛）vs Tool Use 路线（启动中）</h2>
+      <p>NQ 单跳 RAG 已到顶（7B 0.4701）。算法收益曲线变平 → 切 task 而不是继续 scale。</p>
+    </div>
+
+    <div class="comparison-wrap">
+      <table class="comparison">
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>NQ 路线（Phase 0-9）</th>
+            <th>Tool Use 路线（Phase 10-15）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>状态</strong></td>
+            <td><span class="check yes">✓</span> 已收敛</td>
+            <td><span class="check mid">…</span> 启动中</td>
+          </tr>
+          <tr>
+            <td><strong>任务</strong></td>
+            <td>Natural Questions（单跳 RAG）</td>
+            <td>MATH + Python sandbox（多轮工具）</td>
+          </tr>
+          <tr>
+            <td><strong>模型</strong></td>
+            <td>Qwen2.5-3B-Instruct → 7B-Instruct</td>
+            <td>Qwen2.5-Math-7B-Instruct</td>
+          </tr>
+          <tr>
+            <td><strong>工具</strong></td>
+            <td>Wikipedia FAISS retrieval（HTTP）</td>
+            <td>Python sandbox（subprocess + sympy verifier）</td>
+          </tr>
+          <tr>
+            <td><strong>max_turns 是否真用上</strong></td>
+            <td><span class="check no">✗</span> NQ 单跳本质，agent 仍只用 1.18 轮（Phase 8 证伪）</td>
+            <td><span class="check yes">✓</span> code-error → 改代码 → 重跑是真需求</td>
+          </tr>
+          <tr>
+            <td><strong>Reward shaping</strong></td>
+            <td><span class="check no">✗</span> Phase 3 ToRL 实证 hacking</td>
+            <td><span class="check mid">…</span> Phase 15 ToolRL multi-tier 待验证</td>
+          </tr>
+          <tr>
+            <td><strong>SOTA</strong></td>
+            <td><strong style="color:#fcd34d">val/nq 0.4701</strong>（Phase 9）</td>
+            <td>(待 Phase 10-15 验证)</td>
+          </tr>
+          <tr>
+            <td><strong>RL 框架</strong></td>
+            <td>verl (Phase 0-5) → SkyRL (Phase 6-9)</td>
+            <td>SkyRL (paper GSPO baseline)</td>
+          </tr>
+          <tr>
+            <td><strong>Wiki 文档</strong></td>
+            <td><a href="https://my.feishu.cn/wiki/Rjmqwq3jNiIXG8kp9gtcOghQnpb" target="_blank" style="color:#60a5fa">飞书 13 个根节点</a></td>
+            <td><a href="https://my.feishu.cn/docx/CF15d0YYVoK563xskSfcC2cTnDd" target="_blank" style="color:#60a5fa">Tool Use 复现计划</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Tech stack -->
+<section class="show" id="tech">
+  <div class="container">
+    <div class="section-header">
+      <div class="eyebrow">Tech Stack</div>
+      <h2>构建在前沿 RL 工程栈上</h2>
+    </div>
+
+    <div class="tech-grid">
+      <span class="tech">🧠 Qwen2.5-{3B,7B}-Instruct</span>
+      <span class="tech">⚡ vllm 0.8 v1 async</span>
+      <span class="tech">🔥 SkyRL (FSDP-2 + ray)</span>
+      <span class="tech">🔧 verl (Phase 0-5)</span>
+      <span class="tech">📚 e5-base-v2</span>
+      <span class="tech">🗄️ FAISS-GPU IVFPQ + Flat</span>
+      <span class="tech">📊 Weights & Biases</span>
+      <span class="tech">📦 HuggingFace + hf-mirror</span>
+      <span class="tech">⚙️ uv (deterministic deps)</span>
+      <span class="tech">🐳 AutoDL（4090 → PRO 6000）</span>
+      <span class="tech">🔬 sympy verifier (Phase 10)</span>
+      <span class="tech">📝 lark-cli + 23 lark-* skills</span>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="container">
+    <div class="cta-card">
+      <h2>读完每个 phase，<br/>看 RL 工程直觉如何沉淀</h2>
+      <p>飞书有 13 个根 wiki 节点，每个 Phase 单独一篇含完整训练动力学（reward / entropy / KL / response_len 5 个时点对照）。</p>
+      <div class="hero-cta">
+        <a href="https://my.feishu.cn/wiki/Rjmqwq3jNiIXG8kp9gtcOghQnpb" class="btn btn-primary" target="_blank">📚 进入飞书知识库</a>
+        <a href="https://github.com/zuojunjie/agenicRL" class="btn btn-secondary">⭐ Star on GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="container">
+    <p>agenicRL · Phase 0-9 已收官，Phase 10+ Tool Use 复现链启动中</p>
+    <p style="margin-top:8px">
+      <a href="https://github.com/zuojunjie/agenicRL" target="_blank">GitHub</a>
+      &nbsp;·&nbsp;
+      <a href="https://my.feishu.cn/wiki/Rjmqwq3jNiIXG8kp9gtcOghQnpb" target="_blank">飞书 Wiki</a>
+      &nbsp;·&nbsp;
+      <a href="https://my.feishu.cn/docx/CF15d0YYVoK563xskSfcC2cTnDd" target="_blank">Tool Use 路线</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
