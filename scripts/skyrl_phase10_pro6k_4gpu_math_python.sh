@@ -32,7 +32,7 @@ set -ex
 ulimit -n 65535
 
 DATA_DIR="/root/autodl-tmp/data/math"
-RUN_NAME="phase10-skyrl-pro6k-2gpu-math-python-7b-Math-Inst"
+RUN_NAME="phase10-skyrl-pro6k-4gpu-colocate-math-python-7b-Math-Inst"
 MODEL_PATH="/root/autodl-tmp/models/Qwen2.5-Math-7B-Instruct"
 PROJECT="agenic-rl-A6000New"
 
@@ -59,7 +59,7 @@ export NCCL_P2P_DISABLE=1
 export NCCL_IB_DISABLE=1
 
 # === Phase 10: 2 GPU 训练 + Python sandbox 在 CPU 进程 ===
-export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 
 # Verify model + data ready
 test -d "$MODEL_PATH" || { echo "❌ Model not found: $MODEL_PATH"; exit 1; }
@@ -97,16 +97,16 @@ UV_PROJECT_ENVIRONMENT=/root/autodl-tmp/.skyrl-venv uv run --frozen --extra fsdp
     trainer.flash_attn=true \
     \
     `# === GPU dist: 2 卡 ===` \
-    trainer.placement.policy_num_gpus_per_node=2 \
-    trainer.placement.ref_num_gpus_per_node=2 \
+    trainer.placement.policy_num_gpus_per_node=4 \
+    trainer.placement.ref_num_gpus_per_node=4 \
     \
     `# === Inference: TP=2 ===` \
     generator.inference_engine.num_engines=1 \
-    generator.inference_engine.tensor_parallel_size=2 \
+    generator.inference_engine.tensor_parallel_size=4 \
     generator.inference_engine.backend=vllm \
     generator.inference_engine.run_engines_locally=true \
     generator.inference_engine.weight_sync_backend=nccl \
-    generator.inference_engine.gpu_memory_utilization=0.60 \
+    generator.inference_engine.gpu_memory_utilization=0.70 \
     generator.inference_engine.async_engine=true \
     generator.inference_engine.enforce_eager=false \
     generator.inference_engine.max_num_batched_tokens=16384 \
@@ -116,8 +116,8 @@ UV_PROJECT_ENVIRONMENT=/root/autodl-tmp/.skyrl-venv uv run --frozen --extra fsdp
     trainer.update_epochs_per_batch=1 \
     trainer.train_batch_size=512 \
     trainer.policy_mini_batch_size=64 \
-    trainer.micro_forward_batch_size_per_gpu=8 \
-    trainer.micro_train_batch_size_per_gpu=8 \
+    trainer.micro_forward_batch_size_per_gpu=16 \
+    trainer.micro_train_batch_size_per_gpu=16 \
     trainer.max_prompt_length=2048 \
     \
     `# === Generation (long CoT for math reasoning) ===` \

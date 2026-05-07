@@ -27,18 +27,26 @@ import tempfile
 import textwrap
 from typing import Optional
 
-from skyrl_gym.tools.core import BaseTool, ToolGroup, tool
+from skyrl_gym.tools.core import ToolGroup, tool
 
 
 logger = logging.getLogger(__name__)
 
 
-# Wrapper template that runs user code with resource limits + safe imports
+# Wrapper template that runs user code with resource limits + safe imports.
+# NOTE: We use RLIMIT_DATA (heap segment) instead of RLIMIT_AS (virtual address
+# space) because the Python interpreter inherits huge VA mappings from torch +
+# CUDA libs in the parent venv, which would make RLIMIT_AS=1GB instantly fail
+# even before any user code runs. RLIMIT_DATA still catches user `a = [0]*10**9`
+# style memory bombs but doesn't conflict with parent process VA layout.
 _RUNNER_TEMPLATE = """
 import resource, signal, sys
 
-# Memory limit
-resource.setrlimit(resource.RLIMIT_AS, ({mem_bytes}, {mem_bytes}))
+# Memory limit (heap only — see comment above)
+try:
+    resource.setrlimit(resource.RLIMIT_DATA, ({mem_bytes}, {mem_bytes}))
+except (ValueError, OSError):
+    pass  # not all kernels enforce RLIMIT_DATA
 
 # Allow common math libs (whitelist by trying to preimport)
 import math, fractions, itertools
@@ -75,7 +83,7 @@ class PythonSandboxToolGroup(ToolGroup):
     def __init__(
         self,
         timeout: int = 10,
-        mem_mb: int = 1024,
+        mem_mb: int = 4096,
         log_requests: bool = False,
         python_executable: Optional[str] = None,
     ):
@@ -123,7 +131,7 @@ class PythonSandboxToolGroup(ToolGroup):
 
 # Self-test
 if __name__ == "__main__":
-    tg = PythonSandboxToolGroup(timeout=5, mem_mb=512)
+    tg = PythonSandboxToolGroup(timeout=15, mem_mb=4096)
     print("=== test 1: simple print ===")
     print(tg.execute_python("print(1 + 2)"))
 

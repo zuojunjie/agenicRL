@@ -25,7 +25,7 @@ from skyrl_gym.tools.python_sandbox import PythonSandboxToolGroup
 @dataclass
 class MathPythonEnvConfig:
     timeout: int = 10        # python sandbox timeout (sec)
-    mem_mb: int = 1024       # python sandbox memory (MB)
+    mem_mb: int = 4096       # python sandbox memory (MB) — needs ≥4GB to avoid cold-start timeout when subprocess imports numpy+sympy under torch venv
     log_requests: bool = False
 
 
@@ -58,7 +58,7 @@ class MathPythonEnv(BaseTextEnv):
 
         # Init Python sandbox tool
         timeout = getattr(env_config, "timeout", 10)
-        mem_mb = getattr(env_config, "mem_mb", 1024)
+        mem_mb = getattr(env_config, "mem_mb", 4096)
         log_requests = getattr(env_config, "log_requests", False)
         self.tool_group = PythonSandboxToolGroup(
             timeout=timeout, mem_mb=mem_mb, log_requests=log_requests
@@ -77,7 +77,14 @@ class MathPythonEnv(BaseTextEnv):
     def _is_done(self, action: str) -> bool:
         if self.turns >= self.max_turns:
             return True
-        return "<answer>" in action and "</answer>" in action
+        # Accept both <answer>...</answer> and \boxed{...} as terminal actions.
+        # Qwen2.5-Math-Instruct natively emits \boxed{} format; reward fn already
+        # supports both, but action-parser must also recognize \boxed to mark done.
+        if "<answer>" in action and "</answer>" in action:
+            return True
+        if r"\boxed{" in action:
+            return True
+        return False
 
     def _get_reward(self, action: str, done: bool) -> float:
         if not done:
@@ -107,7 +114,7 @@ class MathPythonEnv(BaseTextEnv):
             code = self._parse_action(action)
             if code[0] is None:
                 # No <python> tag found, no <answer> either → invalid action
-                error = "[Error] No <python>...</python> or <answer>...</answer> found in response."
+                error = "[Error] No <python>...</python>, <answer>...</answer> or \boxed{} found in response."
                 observation = None
             else:
                 observation = self._execute_tool(
