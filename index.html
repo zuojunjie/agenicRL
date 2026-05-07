@@ -1096,13 +1096,53 @@
         </div>
         <div class="phase-val"><span class="num sota">0.4701</span></div>
       </div>
-      <div class="phase" data-state="planned">
-        <div class="phase-num">10-15</div>
+      <div class="phase" data-state="mid">
+        <div class="phase-num">10</div>
         <div class="phase-content">
-          <h4>切到 Tool Use 路线（MATH + Python sandbox）</h4>
-          <p>5 篇论文链复现：ToRL→ARTIST→GiGPO 重试→ARPO→ToolRL</p>
+          <h4>Phase 10：1.5B/3B/7B Math 横向对比 + V0 baseline</h4>
+          <p>22 个 test 版本探索（gpu_mem/micro/P2P/alloc）；锁定 4GPU/7B v17 + 2GPU/1.5B v22；<strong>1.5B-Math base 0.61 反超 7B 0.41</strong>（专精 > 规模）；step 10 val 57% / step 20 val 58.6%</p>
         </div>
-        <div class="phase-val"><span class="num">🟡</span></div>
+        <div class="phase-val"><span class="num">0.65</span><span class="hint">val ↑</span></div>
+      </div>
+      <div class="phase" data-state="planned">
+        <div class="phase-num">11</div>
+        <div class="phase-content">
+          <h4>P11 ARTIST：outcome-based 多轮信用分配</h4>
+          <p>解决当前 reward 0/1 sparse → turn-level credit；改 advantage_estimator ~200 行；旁路：关 KL loss</p>
+        </div>
+        <div class="phase-val"><span class="num">⭐⭐⭐</span></div>
+      </div>
+      <div class="phase" data-state="planned">
+        <div class="phase-num">12</div>
+        <div class="phase-content">
+          <h4>P12 ToolRL：multi-tier reward</h4>
+          <p>process reward 加 syntax/sandbox/format 三档（与 P11 互补，prior + posterior）；改 env utils.py ~100 行</p>
+        </div>
+        <div class="phase-val"><span class="num">⭐⭐⭐</span></div>
+      </div>
+      <div class="phase" data-state="planned">
+        <div class="phase-num">13</div>
+        <div class="phase-content">
+          <h4>P13 GiGPO 重试：双层 advantage（Math 4-turn 重赌）</h4>
+          <p>Phase 4 NQ 单跳失败，Math 4-turn 才有发挥空间；inner（turn）+outer（cross-prompt）；~150 行</p>
+        </div>
+        <div class="phase-val"><span class="num">⭐⭐</span></div>
+      </div>
+      <div class="phase" data-state="planned">
+        <div class="phase-num">14</div>
+        <div class="phase-content">
+          <h4>P14 ARPO：entropy-adaptive rollout 完整复现</h4>
+          <p>高熵节点动态分支；与 ARTIST 配合：ARPO 找点，ARTIST 评分；大改 rollout loop ~500 行</p>
+        </div>
+        <div class="phase-val"><span class="num">⭐⭐</span></div>
+      </div>
+      <div class="phase" data-state="planned">
+        <div class="phase-num">15</div>
+        <div class="phase-content">
+          <h4>~~P15 ToRL retry~~（可跳）</h4>
+          <p>per-turn shaping，Phase 3 已证伪 reward hacking + 与 P11 重叠</p>
+        </div>
+        <div class="phase-val"><span class="num">❌</span></div>
       </div>
     </div>
   </div>
